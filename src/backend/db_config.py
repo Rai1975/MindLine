@@ -2,8 +2,6 @@ from src.backend.config import DB_PORT, DB_NAME, DB_HOST, DB_PASSWORD, DB_USER
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-print("Touched")
-
 # Database Connection
 try:
     def connect_db():
