@@ -1,0 +1,6 @@
+# Backend stuff
+src/backend/.env
+*/__pycache__/*
+src/backend/__pycache__/
+src/backend/controllers/__pycache__/
+src/backend/.venv
