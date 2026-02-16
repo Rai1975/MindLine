@@ -1,6 +1,10 @@
 from openai import OpenAI
 import re
+import spacy
 from src.backend.config import OPENAI_API_KEY
+
+# Loading spacy module on app start
+spacy_model = spacy.load("en_core_web_sm")
 
 # Helper function for openai calls
 def chat_response(system_prompt, input):
@@ -48,6 +52,30 @@ def context_manager(text):
 def sentence_parser(text):
     return re.split(r'(?<=[.!?]) +', text)
 
+# Actually idk about this, what about complex sentences?
+# We can't just give an object a sentiment based on the sentence sentiment
+def object_recognition(sentences):
+    proper_nouns = []
+    nouns = []
+
+    for text in sentences:
+        doc = spacy_model(text)
+
+        sentence_propns = []
+        sentence_nouns = []
+        for token in doc:
+            if token.pos_ == "PROPN":
+                sentence_propns.append(token.text)
+
+            elif token.pos_ == "NOUN":
+                sentence_nouns.append(token.text)
+
+        proper_nouns.append(sentence_propns)
+        nouns.append(sentence_nouns)
+
+
+    return {"NOUN": nouns, "PROPN": proper_nouns}
+
 
 if __name__ == "__main__":
         Big_Text = """
@@ -64,4 +92,10 @@ if __name__ == "__main__":
         print(final_text)
         print('---')
 
-        print(sentence_parser(final_text))
+        sentences = sentence_parser(final_text)
+        print(sentences)
+        print('---')
+
+        obs = object_recognition(sentences)
+        print(obs)
+        print('---')
