@@ -84,7 +84,9 @@ if __name__ == "__main__":
         and had a lot of fun. I think he's great dude and we'd make amazing friends like how can this day get any better.
         """
 
-        cleaned_response = response_cleaner(Big_Text)
+        small_text = " think Shawn is great, and Abood has been a really shitty person to me lately"
+
+        cleaned_response = response_cleaner(small_text)
         print(cleaned_response)
         print("---")
 
