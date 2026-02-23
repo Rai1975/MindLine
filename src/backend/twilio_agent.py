@@ -51,7 +51,7 @@ def call_trainscript_gen():
         future_recording = executor.submit(get_most_recent_recording)
         recording_transcript = future_recording.result()  # waits until done
 
-        with open(os.path.join(os.getcwd(), 'twilio_outputs\\transcripts\\output.txt'), 'w+') as f:
+        with open(os.path.join(os.getcwd(), f'twilio_outputs\\transcripts\\output{recording_transcript.get('recording_id')}.txt'), 'w+') as f:
             f.write(recording_transcript.get('recording_id'))
             f.write(recording_transcript.get('transcript'))
 

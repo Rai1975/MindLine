@@ -52,52 +52,36 @@ def context_manager(text):
 def sentence_parser(text):
     return re.split(r'(?<=[.!?]) +', text)
 
-# Actually idk about this, what about complex sentences?
-# We can't just give an object a sentiment based on the sentence sentiment
-def object_recognition(sentences):
-    proper_nouns = []
-    nouns = []
+def pipeline(text):
+    cleaned_text = response_cleaner(text)
 
-    for text in sentences:
-        doc = spacy_model(text)
+    context_managed = context_manager(cleaned_text)
 
-        sentence_propns = []
-        sentence_nouns = []
-        for token in doc:
-            if token.pos_ == "PROPN":
-                sentence_propns.append(token.text)
+    parsed_sentences = sentence_parser(context_managed)
 
-            elif token.pos_ == "NOUN":
-                sentence_nouns.append(token.text)
+    return parsed_sentences
 
-        proper_nouns.append(sentence_propns)
-        nouns.append(sentence_nouns)
+# if __name__ == "__main__":
+#         Big_Text = """
+#         Today was a great day man like I answered really well in all my classes
+#         and even got all my homework done on time. On top of that, I hit it off with this guy named Shawn
+#         and had a lot of fun. I think he's great dude and we'd make amazing friends like how can this day get any better.
+#         """
 
+#         small_text = " think Shawn is great, and Abood has been a really shitty person to me lately"
 
-    return {"NOUN": nouns, "PROPN": proper_nouns}
+#         cleaned_response = response_cleaner(small_text)
+#         print(cleaned_response)
+#         print("---")
 
+#         final_text = context_manager(cleaned_response)
+#         print(final_text)
+#         print('---')
 
-if __name__ == "__main__":
-        Big_Text = """
-        Today was a great day man like I answered really well in all my classes
-        and even got all my homework done on time. On top of that, I hit it off with this guy named Shawn
-        and had a lot of fun. I think he's great dude and we'd make amazing friends like how can this day get any better.
-        """
+#         sentences = sentence_parser(final_text)
+#         print(sentences)
+#         print('---')
 
-        small_text = " think Shawn is great, and Abood has been a really shitty person to me lately"
-
-        cleaned_response = response_cleaner(small_text)
-        print(cleaned_response)
-        print("---")
-
-        final_text = context_manager(cleaned_response)
-        print(final_text)
-        print('---')
-
-        sentences = sentence_parser(final_text)
-        print(sentences)
-        print('---')
-
-        obs = object_recognition(sentences)
-        print(obs)
-        print('---')
+#         obs = object_recognition(sentences)
+#         print(obs)
+#         print('---')
