@@ -22,9 +22,15 @@ def emotion_analysis(sentence):
 
     return result
 
-# if __name__ == "__main__":
-#     sentence = "I'm gonna lock in this semester and lose a ton of weight"
+if __name__ == "__main__":
+    sentence = 'Later on, I spent some time talking with a new coworker named Alex'
+    sentence_2 = 'and Alex and I just clicked right away—lots of laughs and easy conversation.'
 
-#     print(sentiment_analysis(sentence))
-#     print('---')
-#     print(emotion_analysis(sentence))
+    print(sentiment_analysis(sentence))
+    print('---')
+    print(emotion_analysis(sentence))
+    print('---')
+    print('---')
+    print(sentiment_analysis(sentence_2))
+    print('---')
+    print(emotion_analysis(sentence_2))

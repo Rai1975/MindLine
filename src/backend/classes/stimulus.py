@@ -18,3 +18,12 @@ class Stimulus:
 
     def __str__(self):
         return f"{self.noun} : {self.adjective}\nSentence: {self.sentence}\nSentiment: {self.sentiment}\nEmotion: {self.emotion}"
+
+    def get_json(self):
+        return {
+            "noun": self.noun,
+            "adjective": self.adjective,
+            "sentiment": self.sentiment,
+            "emotion": self.emotion,
+            "sentence": self.sentence
+        }

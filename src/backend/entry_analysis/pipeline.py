@@ -20,10 +20,6 @@ def final_pipeline(text):
            new_stim = Stimulus(noun, adj, sentence)
            stims.append(new_stim)
 
-    # Let's do sentiment analysis on each of said noun-adj pairs
-    # This is cool but I defo think we need to keep track of sentence
-    # too. Maybe this needs it's own class.
-
     # And also, if there's no adjectives in the sentence
     # We gotta just straight up do sentiment/emotion analysis on
     # said sentence and analyze
@@ -38,23 +34,13 @@ def final_pipeline(text):
 
         print(stim, end='\n\n')
 
-    # sentiments = {}
-    # for sentence in stims:
-    #     for noun, adj in sentence:
-    #         sent = sentiment_analysis(adj)[0]
-    #         emo = emotion_analysis(adj)[0][0]
-    #         if noun in sentiments.keys():
-    #             sentiments[noun].append((sent, emo))
-    #         else:
-    #             sentiments[noun] = [(sent, emo)]
-
-    # for stim in stims:
-    #     print(stim)
-    # print(sentiments)
-
 if __name__ == "__main__":
     Big_Text = """
     Today I kept noticing how different everyone and everything felt. My teacher was patient, encouraging, and surprisingly funny. Shawn seemed quiet but thoughtful and kind. My friend Jacob was energetic, loud, and a little chaotic—but in a good way. Even I felt more confident, focused, and calm than usual. The classroom was bright and comfortable, the air cool and refreshing. My notes looked neat and organized for once. Lunch was warm, flavorful, and satisfying, and even the walk home felt peaceful and relaxing. It wasn’t about what happened today—it was more about how everything and everyone felt: steady, positive, and just… good.
     """
 
-    final_pipeline(Big_Text)
+    Big_Text2 = """
+    Today felt really productive in a totally different way. I finally got around to organizing my space, and it’s crazy how much better everything feels when things are clean and in order. I even tried cooking something new, and it actually turned out pretty good, which surprised me. Later on, I spent some time talking with a new coworker named Alex, and we just clicked right away—lots of laughs and easy conversation. It’s one of those days where everything just flows, and you end it thinking, yeah… this was a solid day.
+    """
+
+    final_pipeline(Big_Text2)

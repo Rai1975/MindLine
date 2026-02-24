@@ -127,6 +127,8 @@ def analyze_sentence(sentence):
     adjectives = []
     doc = nlp_model(sentence)
     token_counter = 0
+
+    # Search for adjectives
     for token in doc:
         # print(token.text, '-', token.pos_)
         if token.pos_ in ['ADJ']:
@@ -144,9 +146,19 @@ def analyze_sentence(sentence):
 
     final = list(set(adjectives))
 
+    # Nouns without adjectives
+    # what will we do for verbs that they like?
+    # like cooking. etc.
+
     return final
 
-# if __name__ == "__main__":
-#     sentence = 'I think Shawn is a great guy, but Abood has been really shitty to me lately'
+if __name__ == "__main__":
+    # sentences = ['Today felt really productive in a totally different way.', 'I finally got around to organizing my space, and the fact that everything in my space feels so much better when my things are clean and in order is crazy.', 'I even tried cooking something new, and the thing I cooked actually turned out pretty good, which surprised me.', 'Later on, I spent some time talking with a new coworker named Alex, and Alex and I just clicked right away—lots of laughs and easy conversation.', 'That day is one of those days where everything just flows, and I end it thinking, yeah...', 'this was a solid day.']
 
-#     print(handle_proper_nouns(sentence))
+    sentence = 'Later on, I spent some time talking with a new coworker named Alex, and Alex and I just clicked right away—lots of laughs and easy conversation.'
+    print(get_doc_stats(nlp_model(sentence)))
+    print(analyze_sentence(sentence))
+
+    # for sentence in sentences:
+    #     print(analyze_sentence(sentence))
+    #     print('---')
