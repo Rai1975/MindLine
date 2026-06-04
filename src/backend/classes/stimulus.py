@@ -1,12 +1,13 @@
+from src.backend.classes.object import Object
 class Stimulus:
     sentiment = ""
     emotion = ""
-    noun = ""
     sentence = ""
     adjective = ""
 
     def __init__(self, noun, adjective, sentence):
-        self.noun = noun
+        # Later implement logic to check db for duplicates and add ID
+        self.noun = Object(token=noun)
         self.adjective = adjective
         self.sentence = sentence
     
@@ -17,11 +18,12 @@ class Stimulus:
         self.sentiment = (sentence_sentiment, adj_sentiment)
 
     def __str__(self):
-        return f"{self.noun} : {self.adjective}\nSentence: {self.sentence}\nSentiment: {self.sentiment}\nEmotion: {self.emotion}"
+        return f"{self.noun.token} : {self.adjective}\nSentence: {self.sentence}\nSentiment: {self.sentiment}\nEmotion: {self.emotion}"
 
     def get_json(self):
         return {
-            "noun": self.noun,
+            "noun": self.noun.token,
+            "noun UUID": self.noun.getID(),
             "adjective": self.adjective,
             "sentiment": self.sentiment,
             "emotion": self.emotion,

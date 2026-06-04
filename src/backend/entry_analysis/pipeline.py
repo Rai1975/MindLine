@@ -2,6 +2,8 @@ from src.backend.entry_analysis.object_recognition import analyze_sentence
 from src.backend.entry_analysis.emotion_analysis import emotion_analysis, sentiment_analysis
 from src.backend.entry_analysis.text_operations import pipeline
 from src.backend.classes.stimulus import Stimulus
+from src.backend.classes.object import Object
+from src.backend.agents.filter_agent import filter_pairs
 
 # Input for this is the text file stuff already read
 def final_pipeline(text):
@@ -17,8 +19,9 @@ def final_pipeline(text):
     for sentence in cleaned_sentences:
         sentence_pairs = analyze_sentence(sentence)
         for noun, adj in sentence_pairs:
-           new_stim = Stimulus(noun, adj, sentence)
-           stims.append(new_stim)
+            new_obj = Object(token=noun)
+            new_stim = Stimulus(new_obj.token, adj, sentence)
+            stims.append(new_stim)
 
     # And also, if there's no adjectives in the sentence
     # We gotta just straight up do sentiment/emotion analysis on
@@ -32,7 +35,10 @@ def final_pipeline(text):
         stim.set_sentiment(sen_sentiment, adj_sentiment)
         stim.set_emotion(emotion)
 
+
         print(stim, end='\n\n')
+
+    filter_pairs(stims)
 
 if __name__ == "__main__":
     Big_Text = """
@@ -43,4 +49,4 @@ if __name__ == "__main__":
     Today felt really productive in a totally different way. I finally got around to organizing my space, and it’s crazy how much better everything feels when things are clean and in order. I even tried cooking something new, and it actually turned out pretty good, which surprised me. Later on, I spent some time talking with a new coworker named Alex, and we just clicked right away—lots of laughs and easy conversation. It’s one of those days where everything just flows, and you end it thinking, yeah… this was a solid day.
     """
 
-    final_pipeline(Big_Text2)
+    final_pipeline(Big_Text)

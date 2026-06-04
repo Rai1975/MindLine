@@ -2,6 +2,35 @@ import spacy
 
 # Loading spacy model
 nlp_model = spacy.load("en_core_web_sm")
+# Entities spaCy considers "significant" for emotional context
+SIGNIFICANT_ENT_TYPES = {"PERSON", "ORG", "GPE", "EVENT", "WORK_OF_ART"}
+
+FILLER_NOUNS = {
+    "thing", "things", "something", "anything", "everything",
+    "time", "way", "fact", "lot", "day", "kind", "sort",
+    "people", "person", "place"
+}
+
+def is_significant_token(token):
+    """
+    Returns True if a noun/propn is worth pairing with an adjective.
+    Priority: named entities > grammatical subjects/objects > everything else
+    """
+    # 1. Named entity — most reliable signal for "person or place"
+    if token.ent_type_ in SIGNIFICANT_ENT_TYPES:
+        return True
+
+    # 2. Grammatical subject or object — the actor/receiver in the sentence
+    if token.dep_ in ("nsubj", "nsubjpass", "dobj", "pobj"):
+        # But skip generic fillers like "thing", "way", "fact"
+        if token.lemma_.lower() not in FILLER_NOUNS:
+            return True
+
+    # 3. Proper nouns are almost always significant (names, places)
+    if token.pos_ == "PROPN":
+        return True
+
+    return False
 
 # Function to get 
 def get_doc_stats(doc):
@@ -19,39 +48,37 @@ def find_noun_adj_pairs(doc, token, token_counter):
     candidates = []
     adjs = []
     start_token_number = token_counter
-    end_token_number = token_counter
     curr_token = token
 
+    # --- Dependency-based pairing (preferred, most accurate) ---
     if token.dep_ == "amod":
-        candidates.append(token.head)
+        if is_significant_token(token.head):          # ← filter here
+            candidates.append(token.head)
     
-    elif token.dep_ == "acomp" or token.head.pos_ == "AUX":
+    elif token.dep_ in ("acomp", "attr") or token.head.pos_ == "AUX":
         for child in token.head.children:
-            if child.dep_ in ["nsubj", "attr"]:
+            if child.dep_ in ("nsubj", "attr") and is_significant_token(child):
                 candidates.append(child)
 
-    while curr_token.pos_ not in ['PUNCT', 'CCONJ'] and start_token_number > 0:
-        start_token_number -= 1
-        curr_token = doc[start_token_number]
+    # --- Proximity scan fallback (only if dep tree gave nothing) ---
+    if not candidates:
+        while curr_token.pos_ not in ['PUNCT', 'CCONJ'] and start_token_number > 0:
+            start_token_number -= 1
+            curr_token = doc[start_token_number]
 
-    sub_token_range = doc[start_token_number:end_token_number]
-    for sub_token in sub_token_range:
-        if sub_token.pos_ in ["PROPN", "NOUN"]:
-            candidates.append(sub_token)
-            # adjectives.append((token.text, sub_token.text))
-    
-    # candidates.sort(key=lambda x: x.pos_ != "PROPN")
+        for sub_token in doc[start_token_number:token_counter]:
+            if sub_token.pos_ in ("PROPN", "NOUN") and is_significant_token(sub_token):
+                candidates.append(sub_token)
 
-    conseq_nouns = find_conseq_nouns(doc)
-    if candidates:
-        if len(conseq_nouns) > 0:
-            for n in conseq_nouns:
-                candidates.append(n)
-        for propn in candidates:
-            adjs.append((propn.text, token.text))
-        
-    else:
-        adjs = []
+    # --- Consecutive noun check (also filtered) ---
+    for n in find_conseq_nouns(doc):
+        if is_significant_token(n):
+            candidates.append(n)
+
+    candidates = list(set(candidates))  # dedupe
+
+    for propn in candidates:
+        adjs.append((propn.text, token.text))
 
     return adjs
 
@@ -109,17 +136,30 @@ def find_conseq_nouns(doc):
     while index < (len(doc) - 2) and token.nbor(1):
         if token.pos_ in desired:
             neighbors = [token.nbor(1), token.nbor(2)]
-            if neighbors[0].pos_ in desired or neighbors[1].pos_ in desired:
-                conseq_nouns.append(token)
-                conseq_nouns.append(neighbors[0]) if neighbors[0].pos_ in desired else conseq_nouns.append(neighbors[1])
+            n1_sig = neighbors[0].pos_ in desired and is_significant_token(neighbors[0])
+            n2_sig = neighbors[1].pos_ in desired and is_significant_token(neighbors[1])
+
+            if n1_sig or n2_sig:
+                if is_significant_token(token):
+                    next_tok = neighbors[0] if n1_sig else neighbors[1]
+                    if token.pos_ == "NOUN" and next_tok.pos_ == "PROPN":
+                        pass  # drop "friend", keep "Jacob"
+                    else:
+                        conseq_nouns.append(token)
+
+                if n1_sig:
+                    conseq_nouns.append(neighbors[0])
+                elif n2_sig:
+                    conseq_nouns.append(neighbors[1])
                 token = token.nbor(2)
                 index += 2
             else:
                 token = token.nbor(1)
-                index += 1 
+                index += 1
         else:
-            token.nbor(1)
             index += 1
+            if index < len(doc):
+                token = doc[index]
 
     return list(set(conseq_nouns))
 
@@ -152,12 +192,12 @@ def analyze_sentence(sentence):
 
     return final
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # sentences = ['Today felt really productive in a totally different way.', 'I finally got around to organizing my space, and the fact that everything in my space feels so much better when my things are clean and in order is crazy.', 'I even tried cooking something new, and the thing I cooked actually turned out pretty good, which surprised me.', 'Later on, I spent some time talking with a new coworker named Alex, and Alex and I just clicked right away—lots of laughs and easy conversation.', 'That day is one of those days where everything just flows, and I end it thinking, yeah...', 'this was a solid day.']
 
-    sentence = 'Later on, I spent some time talking with a new coworker named Alex, and Alex and I just clicked right away—lots of laughs and easy conversation.'
-    print(get_doc_stats(nlp_model(sentence)))
-    print(analyze_sentence(sentence))
+    # sentence = 'Later on, I spent some time talking with a new coworker named Alex, and Alex and I just clicked right away—lots of laughs and easy conversation.'
+    # print(get_doc_stats(nlp_model(sentence)))
+    # print(analyze_sentence(sentence))
 
     # for sentence in sentences:
     #     print(analyze_sentence(sentence))
