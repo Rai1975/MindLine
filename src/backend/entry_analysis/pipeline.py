@@ -38,7 +38,7 @@ def final_pipeline(text):
 
         print(stim, end='\n\n')
 
-    filter_pairs(stims)
+    return filter_pairs(stims)
 
 if __name__ == "__main__":
     Big_Text = """
@@ -49,4 +49,15 @@ if __name__ == "__main__":
     Today felt really productive in a totally different way. I finally got around to organizing my space, and it’s crazy how much better everything feels when things are clean and in order. I even tried cooking something new, and it actually turned out pretty good, which surprised me. Later on, I spent some time talking with a new coworker named Alex, and we just clicked right away—lots of laughs and easy conversation. It’s one of those days where everything just flows, and you end it thinking, yeah… this was a solid day.
     """
 
-    final_pipeline(Big_Text)
+    result = final_pipeline(Big_Text)
+    significant_pairs = result.significant_pairs
+    for pair in significant_pairs:
+            print(f'Key: {pair.entity}')
+            print(f'Value: {pair.adjective}')
+            print(f'sentence: {pair.sentence}')
+            print(f'sen_sent: {pair.sentence_sentiment}')
+            print(f'adj_sent: {pair.adjective_sentiment}')
+            print(f'e1: {pair.emotion1}')
+            print(f'e2: {pair.emotion2}')
+            print(f'e3: {pair.emotion3}')
+            print()

@@ -33,10 +33,15 @@ def get_boto_session() -> boto3.Session:
 # ---------------------------------------------------------------------------
 # 2. Pydantic models — structured output contract
 # ---------------------------------------------------------------------------
-
 class EmotionPair(BaseModel):
-    entity: str     = Field(..., description="The significant person or activity")
-    adjective: str  = Field(..., description="The adjective describing it")
+    entity: str         = Field(..., description="The significant person or activity")
+    adjective: str      = Field(..., description="The adjective describing it")
+    sentence: str       = Field("", description="The original full sentence")
+    sentence_sentiment: str    = Field("", description="Sentence sentiment")
+    adjective_sentiment: str    = Field("", description="Adjective Sentiment")
+    emotion1: str        = Field("", description="Top 3 emotions sensed")
+    emotion2: str        = Field("", description="Top 3 emotions sensed")
+    emotion3: str        = Field("", description="Top 3 emotions sensed")
 
 
 class FilterResult(BaseModel):
@@ -49,6 +54,24 @@ class FilterResult(BaseModel):
         description="Pairs that were removed and a short reason why"
     )
 
+def normalize_self_references(result: FilterResult) -> FilterResult:
+    SELF_REFS = {"i", "me", "myself", "my", "mine"}
+
+    normalized = [
+        EmotionPair(
+            entity="self" if pair.entity.lower() in SELF_REFS else pair.entity,
+            adjective=pair.adjective,
+            sentence=pair.sentence,
+            sentence_sentiment=pair.sentence_sentiment,
+            adjective_sentiment=pair.adjective_sentiment,
+            emotion1=pair.emotion1,
+            emotion2=pair.emotion2,
+            emotion3=pair.emotion3
+        )
+        for pair in result.significant_pairs
+    ]
+
+    return FilterResult(significant_pairs=normalized, dropped=result.dropped)
 
 # ---------------------------------------------------------------------------
 # 3. Build the agent
@@ -104,35 +127,47 @@ def filter_pairs(
     raw_pairs: list[Stimulus],
     agent: Optional[Agent] = None,
 ) -> FilterResult:
-    """
-    Parameters
-    ----------
-    raw_pairs : list of (entity, adjective) tuples from spaCy
-    agent     : pass a pre-built agent to reuse across calls, else one is created
-
-    Returns
-    -------
-    FilterResult with .significant_pairs and .dropped
-    """
     if not raw_pairs:
         return FilterResult()
 
     if agent is None:
         agent = build_agent()
 
+    # Build a lookup so we can re-attach full stimulus data after LLM filtering
+    stimulus_lookup: dict[tuple[str, str], Stimulus] = {
+        (s.noun.token.lower(), s.adjective.lower()): s
+        for s in raw_pairs
+    }
+
     payload = json.dumps([{"entity": s.noun.getToken(), "adjective": s.adjective} for s in raw_pairs])
     prompt  = f"Filter these pairs:\n{payload}"
 
     response = agent(prompt)
 
-    # Strands returns the last text content from the agent
     raw_text = str(response).strip()
-
-    # Strip accidental markdown fences just in case
     if raw_text.startswith("```"):
         raw_text = raw_text.split("```")[1]
         if raw_text.startswith("json"):
             raw_text = raw_text[4:]
 
     parsed = json.loads(raw_text)
-    return FilterResult(**parsed)
+
+    # Re-hydrate each kept pair with full stimulus data
+    enriched_pairs = []
+    for pair in parsed.get("significant_pairs", []):
+        key = (pair["entity"].lower(), pair["adjective"].lower())
+        stimulus = stimulus_lookup.get(key)
+
+        enriched_pairs.append(EmotionPair(
+            entity=pair["entity"],
+            adjective=pair["adjective"],
+            sentence=stimulus.sentence if stimulus else "",
+            sentence_sentiment=stimulus.sentiment[0][0] if stimulus else "",
+            adjective_sentiment=stimulus.sentiment[1][0] if stimulus else "",
+            emotion1=stimulus.emotion[0][0] if stimulus else "",
+            emotion2=stimulus.emotion[1][0] if stimulus else "",
+            emotion3=stimulus.emotion[2][0] if stimulus else "",
+        ))
+
+    result = FilterResult(significant_pairs=enriched_pairs, dropped=parsed.get("dropped", []))
+    return normalize_self_references(result)

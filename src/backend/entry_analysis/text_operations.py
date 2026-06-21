@@ -61,6 +61,12 @@ def pipeline(text):
 
     return parsed_sentences
 
+def textCleaner(text):
+    cleaned_text = response_cleaner(text)
+    context_managed = context_manager(text)
+
+    return context_managed
+
 if __name__ == "__main__":
     Big_Text2 = """
     Today felt really productive in a totally different way. I finally got around to organizing my space, and it’s crazy how much better everything feels when things are clean and in order. I even tried cooking something new, and it actually turned out pretty good, which surprised me. Later on, I spent some time talking with a new coworker named Alex, and we just clicked right away—lots of laughs and easy conversation. It’s one of those days where everything just flows, and you end it thinking, yeah… this was a solid day.

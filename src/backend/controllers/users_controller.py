@@ -1,5 +1,5 @@
 from flask import jsonify, request, Blueprint
-from src.backend.db_config import connect_db
+from src.backend.db_config import connect_sql_db
 from werkzeug.security import generate_password_hash, check_password_hash
 from src.backend.auth import login_required, generate_token
 
@@ -7,7 +7,7 @@ users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 
 @users_bp.route('/create', methods=['POST'])
 def new_user():
-    cur, conn = connect_db()
+    cur, conn = connect_sql_db()
     data = request.get_json()
     f_name = data.get('first_name')
     l_name = data.get('last_name')
@@ -43,7 +43,7 @@ def new_user():
 
 @users_bp.route('/validate', methods=['POST'])
 def validate_user():
-    cur, conn = connect_db()
+    cur, conn = connect_sql_db()
     data = request.get_json()
     email_or_uname = data.get('email_or_uname')
     password = data.get('password')
