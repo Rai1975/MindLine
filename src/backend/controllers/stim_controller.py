@@ -37,4 +37,36 @@ def new_stim(
 
     return stim_id
 
+def new_dropped_stim(
+        entity,
+        adjective,
+        sentence,
+        sentence_sentiment,
+        adjective_sentiment,
+        e1,
+        e2,
+        e3,
+        user_id,
+        entry_id
+):
+    query = '''
+        INSERT INTO "dropped_stimuli" (entity, adjective, sentence, sentence_sentiment, adjective_sentiment, e1, e2, e3, user_id, entry_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+    '''
 
+    cur, conn = connect_sql_db()
+
+    try:
+        cur.execute(query, (entity, adjective, sentence, sentence_sentiment, adjective_sentiment, e1, e2, e3, user_id, entry_id))
+        result = cur.fetchall()
+        stim_id = result[0].get('id')
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        return f"{e}"
+    finally:
+        cur.close()
+        conn.close()
+
+    return stim_id
