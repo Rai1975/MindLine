@@ -80,15 +80,18 @@ def normalize_self_references(result: FilterResult) -> FilterResult:
 SYSTEM_PROMPT = """
 You are a linguistic filter for an emotion analysis pipeline.
 
-You will receive a list of (entity, adjective) pairs extracted by a spaCy parser.
+You will receive a list of (entity, adjective) pairs along with their origin sentnece for context
+extracted by a spaCy parser.
 Your job is to remove noise and keep only pairs that are emotionally meaningful.
+Judge based on the words, their sentences and based on the criteria mentioned below.
 
 Rules:
 - KEEP pairs where the entity is a named person, a specific place, or a concrete activity
 - KEEP pairs where the adjective meaningfully describes emotional tone (e.g. energetic, chaotic, warm)
 - KEEP pairs that describe a dimensionality of time. Like "Today" or "Tomorrow"
-- KEEP pairs that refer to self. "I" or  "me" included.
-- DROP pairs where the entity is a generic/filler noun: thing, way, fact, time, friend, coworker, etc.
+- KEEP pairs that refer to self. "I" or "me" included.
+- DROP pairs where the entity is a generic/filler noun: thing, way, fact, time, friend, coworker etc.
+- DROP pairs where the entity is trivial: air, earth etc.
 - DROP generic nouns like "student" or "teacher" that isn't referring to a specific person.
 - DROP pairs that are redundant duplicates of a kept pair
 - DROP pairs where the adjective is trivial or non-emotional (e.g. "new", "little", "same")
@@ -139,7 +142,7 @@ def filter_pairs(
         for s in raw_pairs
     }
 
-    payload = json.dumps([{"entity": s.noun.getToken(), "adjective": s.adjective} for s in raw_pairs])
+    payload = json.dumps([{"entity": s.noun.getToken(), "adjective": s.adjective, "origin_sentence": s.sentence} for s in raw_pairs])
     prompt  = f"Filter these pairs:\n{payload}"
 
     response = agent(prompt)

@@ -25,9 +25,10 @@ def response_cleaner(response):
     You are an intelligent agent tasked with cleaning up grammatical errors in spoken words. You will
     be given a transcript from spoken text which you will have to clean up into correct grammar.
 
-    You will only return the cleaned text as your output.
+    You will only return the cleaned text as your output. YOU WILL NOT CHANGE THE REFERENCES, OR PERSPECTIVE OF SPEECH.
+    If a sentence is in first person, keep it in first person. DO NOT change it.
 
-    YOU MUST NOT CHANGE THE SENTENCE STRUCTURE OR THE SEMANTIC MEANING OF THE SENTENCES.
+    YOU MUST NOT CHANGE THE SENTENCE STRUCTURE OR THE SEMANTIC MEANING OF THE SENTENCES. YOU ONLY FIX GRAMMATICAL ERRORS.
     """
     return chat_response(SYSTEM_PROMPT, response)
 
@@ -44,6 +45,8 @@ def context_manager(text):
     You will only return the cleaned text as your output.
 
     YOU MUST NOT CHANGE THE SENTENCE STRUCTURE OR THE SEMANTIC MEANING OF THE SENTENCES.
+    NEVER REFER TO SELF (I, me) AS A NARRATOR, KEEP IT AS I, ME ETC. DO NOT ADD THINGS, ONLY MANAGE CONTEXT.
+    DO NOT CHANGE THE SPEECH FROM ORIGINAL FORM OF SPEECH, DO NOT SWITCH TO THIRD PERSON.
     """
 
     return chat_response(SYSTEM_PROMPT, text)
@@ -72,4 +75,4 @@ if __name__ == "__main__":
     Today felt really productive in a totally different way. I finally got around to organizing my space, and it’s crazy how much better everything feels when things are clean and in order. I even tried cooking something new, and it actually turned out pretty good, which surprised me. Later on, I spent some time talking with a new coworker named Alex, and we just clicked right away—lots of laughs and easy conversation. It’s one of those days where everything just flows, and you end it thinking, yeah… this was a solid day.
     """
 
-    print(pipeline(Big_Text2))
+    print(textCleaner(Big_Text2))

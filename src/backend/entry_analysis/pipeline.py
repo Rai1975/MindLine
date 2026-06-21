@@ -49,7 +49,21 @@ if __name__ == "__main__":
     Today felt really productive in a totally different way. I finally got around to organizing my space, and it’s crazy how much better everything feels when things are clean and in order. I even tried cooking something new, and it actually turned out pretty good, which surprised me. Later on, I spent some time talking with a new coworker named Alex, and we just clicked right away—lots of laughs and easy conversation. It’s one of those days where everything just flows, and you end it thinking, yeah… this was a solid day.
     """
 
-    result = final_pipeline(Big_Text)
+    SAD_TEXT = '''
+        Today was one of those days where everything seemed to go wrong.
+
+        I overslept by almost an hour because my phone died overnight, so I woke up in a panic. I rushed to get ready, spilled coffee on my shirt, and had to change at the last minute. Of course, that made me even later.
+
+        Work wasn't much better. I forgot about a meeting that had been on my calendar all week, and my manager asked me questions I wasn't prepared to answer. I felt embarrassed and spent the rest of the morning replaying the conversation in my head.
+
+        At lunch, I realized I'd left my wallet at home, so I had to borrow money from a coworker. Then it started raining right when I left the office, and since I'd forgotten my umbrella, I got completely soaked walking to my car.
+
+        The drive home was slow because of traffic, and when I finally got back, I discovered that the groceries I'd planned to use for dinner had gone bad. I ended up eating a bowl of cereal and calling it a night.
+
+        Nothing catastrophic happened today, but it felt like a hundred small frustrations piled on top of each other. I'm tired, annoyed, and ready for this day to be over. Hopefully tomorrow is kinder.
+     '''
+
+    result = final_pipeline(SAD_TEXT)
     significant_pairs = result.significant_pairs
     for pair in significant_pairs:
             print(f'Key: {pair.entity}')
