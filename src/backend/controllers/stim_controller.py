@@ -1,8 +1,9 @@
 from flask import jsonify, request, Blueprint
 from src.backend.db_config import connect_sql_db, run_psql_query
 from src.backend.controllers.users_controller import new_user
+from math import ceil
 
-stims_bp = Blueprint('strimuli', __name__, url_prefix='/api/stims')
+stims_bp = Blueprint('stimuli', __name__, url_prefix='/api/stims')
 
 def new_stim(
         entity,
@@ -115,3 +116,69 @@ def new_entity(entity, user_id):
     result = run_psql_query(query, values, insert=True)
 
     return result
+
+@stims_bp.route('/getEntityStims', methods=['GET'])
+def get_entity_stims():
+    entity_id = request.args.get('entity_id')
+    user_id = request.args.get('user_id')
+    page = int(request.args.get('page'))
+    pageSize = int(request.args.get('pageSize'))
+
+    offset = (page - 1) * pageSize
+
+    query = '''
+        SELECT
+        s.entity,
+        se.adjective,
+        se.sentence,
+        se.sentence_sentiment,
+        se.adjective_sentiment,
+        se.e1,
+        se.e2,
+        se.e3
+    FROM stimuli s
+    JOIN stimuli_emotions se
+        ON se.entity_id = s.id
+    WHERE s.id = %s
+    AND se.user_id = %s
+    ORDER BY se.id
+    LIMIT %s
+    OFFSET %s;
+    '''
+
+    values = (entity_id, user_id, pageSize, offset)
+
+    result = run_psql_query(query, values, insert=False)
+
+    res = {}
+    data = []
+
+    if len(result):
+        for object in result:
+            data.append(
+                {
+                    "entity": object.get('entity'),
+                    "adjective": object.get('adjective'),
+                    "sentence": object.get('sentence'),
+                    "sentence_sentiment": object.get('sentence_sentiment'),
+                    "adjective_sentiment": object.get('adjective_sentiment'),
+                    "e1": object.get('e1'),
+                    "e2": object.get('e2'),
+                    "e3": object.get('e3')
+                }
+            )
+
+        res = {
+            "page": page,
+            "pageSize": pageSize,
+            "data": data
+        }
+
+    else:
+        res = {
+            "page": page,
+            "pageSize": pageSize,
+            "data": []
+        }
+
+    return res
