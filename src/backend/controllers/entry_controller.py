@@ -2,8 +2,8 @@ from flask import jsonify, request, Blueprint
 from src.backend.entry_analysis.text_operations import textCleaner as textPipeline
 import threading
 from src.backend.entry_analysis.pipeline import final_pipeline as finalPipeline
-from src.backend.controllers.stim_controller import new_stim
-from src.backend.db_config import connect_sql_db, run_neo4j_query
+from src.backend.controllers.stim_controller import new_stim, new_dropped_stim
+from src.backend.db_config import connect_sql_db, run_neo4j_query, run_psql_query
 from werkzeug.security import generate_password_hash, check_password_hash
 from src.backend.auth import login_required, generate_token
 from src.backend.classes.entry import Entry
@@ -65,6 +65,7 @@ def new_entry():
             except Exception as e:
                 return jsonify({"message": f"Error: {e}"}, 400)
 
+
         return jsonify({"message": "Success! New entry recorded"}), 200
 
     except Exception as e:
@@ -78,12 +79,10 @@ def new_entry():
 @entries_bp.route('/read', methods=['GET'])
 def read_entry():
     cur, conn = connect_sql_db()
-    data = request.get_json()
-    # Again, will be gone
-    user_id = data.get('user_id')
-    entry_id = data.get('entry_id')
+    user_id = request.args.get('user_id')
+    entry_id = request.args.get('entry_id')
 
-    cur.execute("SELECT * FROM users WHERE id = %s", (user_id, ))
+    cur.execute("SELECT * FROM \"Users\" WHERE id = %s", (user_id, ))
     if not cur.fetchone():
         return jsonify({'error': 'User does not exist.'}), 400
     
@@ -103,3 +102,65 @@ def read_entry():
 
     else:
         return jsonify({"entry": rows})
+
+@entries_bp.route('/update', methods=['POST'])
+def update_entry():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    entry_id = data.get('entry_id')
+    updated_text = data.get('updated_text')
+    cur, conn = connect_sql_db()
+
+    try:
+        cur.execute(
+                '''
+                UPDATE journal_entries
+                SET user_id = %s, raw_entry = %s
+                ''',
+                (user_id, updated_text)
+        )
+        conn.commit()
+
+        cleaned_entry = textPipeline(text=update_entry)
+
+
+        cur.execute(
+            'UPDATE journal_entries SET cleaned_entry = %s WHERE id = %s',
+            (cleaned_entry, entry_id)
+        )
+        conn.commit()
+
+        # Now clean up existing stims for the entry
+        cur.execute(
+            'DELETE FROM stimuli_emotions WHERE entry_id = %s',
+            (entry_id,)
+        )
+
+        model_output = finalPipeline(text=cleaned_entry)
+        for ep in model_output.significant_pairs:
+            try:
+                id = new_stim(
+                    entity = ep.entity,
+                    adjective=ep.adjective,
+                    sentence = ep.sentence,
+                    sentence_sentiment = ep.sentence_sentiment,
+                    adjective_sentiment = ep.adjective_sentiment,
+                    e1 = ep.emotion1,
+                    e2 = ep.emotion2,
+                    e3 = ep.emotion3,
+                    user_id = user_id,
+                    entry_id = entry_id
+                )
+            except Exception as e:
+                return jsonify({"message": f"Error: {e}"}, 400)
+
+
+        return jsonify({"message": "Success! Entry updated"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"message": f"Error updating entry: {e}"}), 500
+
+    finally:
+        cur.close()
+        conn.close()
