@@ -111,13 +111,15 @@ def update_entry():
     updated_text = data.get('updated_text')
     cur, conn = connect_sql_db()
 
+    # TODO: Test this more pls
     try:
         cur.execute(
                 '''
                 UPDATE journal_entries
-                SET user_id = %s, raw_entry = %s
+                SET raw_entry = %s
+                WHERE user_id = %s AND id = %s
                 ''',
-                (user_id, updated_text)
+                (updated_text, user_id, entry_id)
         )
         conn.commit()
 
