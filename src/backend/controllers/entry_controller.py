@@ -42,8 +42,8 @@ def new_entry():
 
 
         cur.execute(
-            'UPDATE journal_entries SET cleaned_entry = %s WHERE id = %s',
-            (cleaned_entry, entry_id)
+            'UPDATE journal_entries SET cleaned_entry = %s, search_vector=to_tsvector(\'english\', %s) WHERE id = %s',
+            (cleaned_entry, cleaned_entry, entry_id)
         )
         conn.commit()
 
@@ -123,7 +123,7 @@ def update_entry():
         )
         conn.commit()
 
-        cleaned_entry = textPipeline(text=update_entry)
+        cleaned_entry = textPipeline(text=updated_text)
 
 
         cur.execute(
@@ -166,3 +166,50 @@ def update_entry():
     finally:
         cur.close()
         conn.close()
+
+@entries_bp.route('/keywordSearch', methods=["POST"])
+def keyword_search():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    keyword = data.get('keyword')
+    try:
+        entry_query = '''
+        SELECT je.cleaned_entry, je.id
+        FROM journal_entries je
+        WHERE user_id = %s
+        AND search_vector @@ plainto_tsquery('english', %s);
+        '''
+        results = run_psql_query(entry_query, (user_id, keyword))
+        if not results:
+            return jsonify([])
+
+        entry_ids = [entry.get('id') for entry in results]
+
+        entity_query = '''
+        SELECT se.entry_id, s.entity, se.sentence
+        FROM stimuli_emotions se
+        JOIN stimuli s ON se.entity_id = s.id
+        WHERE se.entry_id = ANY(%s)
+        '''
+        stim_results = run_psql_query(entity_query, (entry_ids,))
+
+        # Group stims by entry_id
+        stims_by_entry = {}
+        for stim in stim_results:
+            eid = stim.get('entry_id')
+            stims_by_entry.setdefault(eid, []).append({
+                "entity": stim.get('entity'),
+                "sentence": stim.get('sentence')
+            })
+
+        output = [
+            {
+                "entry": entry.get('cleaned_entry'),
+                "stims": stims_by_entry.get(entry.get('id'), [])
+            }
+            for entry in results
+        ]
+        return jsonify(output)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
