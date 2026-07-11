@@ -83,6 +83,8 @@ def read_entries():
     entry_id = request.args.get('entry_id', '')
     fromDate = request.args.get('from_date', '')
     toDate = request.args.get('to_date', '')
+    entity = request.args.get('entity', '')
+    emotion = request.args.get('emotion', '')
     page = max(int(request.args.get("page", 1)), 1)
     page_size = min(int(request.args.get("page_size", 20)), 100)
 
@@ -97,28 +99,40 @@ def read_entries():
     if not cur.fetchone():
         return jsonify({'error': 'User does not exist.'}), 400
 
-    conditions = ["user_id = %s"]
+    conditions = ["je.user_id = %s"]
     params = [user_id]
 
     query = '''
-        SELECT id, raw_entry, cleaned_entry, COUNT(*) OVER() AS total_records
-        FROM journal_entries
+        SELECT je.id, je.raw_entry, je.cleaned_entry, COUNT(*) OVER() AS total_records
+        FROM journal_entries je
+        JOIN stimuli_emotions se ON se.entry_id = je.id AND se.user_id = je.user_id
+        JOIN stimuli s ON s.user_id = je.user_id AND se.entity_id = s.id
     '''
 
     try:
         if entry_id:
-            conditions.append('id = %s')
+            conditions.append('je.id = %s')
             params.append(entry_id)
 
         if fromDate:
             fromDate += ' 00:00:00'
-            conditions.append('created_at >= %s')
+            conditions.append('je.created_at >= %s')
             params.append(fromDate)
         
         if toDate:
             toDate += ' 23:59:59'
-            conditions.append('created_at <= %s')
+            conditions.append('je.created_at <= %s')
             params.append(toDate)
+        
+        if entity:
+            conditions.append('s.entity = %s')
+            params.append(entity)
+
+        if emotion:
+            conditions.append('se.e1 = %s OR se.e2 = %s OR se.e3 = %s')
+            params.append(emotion)
+            params.append(emotion)
+            params.append(emotion)
         
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -126,7 +140,7 @@ def read_entries():
         offset = (page - 1) * page_size
         
         query += """
-            ORDER BY created_at DESC
+            ORDER BY je.created_at DESC
             LIMIT %s OFFSET %s
         """
         params.extend([page_size, offset])
