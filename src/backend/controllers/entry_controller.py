@@ -77,31 +77,73 @@ def new_entry():
         conn.close()
 
 @entries_bp.route('/read', methods=['GET'])
-def read_entry():
+def read_entries():
     cur, conn = connect_sql_db()
-    user_id = request.args.get('user_id')
-    entry_id = request.args.get('entry_id')
+    user_id = request.args.get('user_id', '')
+    entry_id = request.args.get('entry_id', '')
+    fromDate = request.args.get('from_date', '')
+    toDate = request.args.get('to_date', '')
+    page = max(int(request.args.get("page", 1)), 1)
+    page_size = min(int(request.args.get("page_size", 20)), 100)
+
+    # Pagination
+    limit = min(int(request.args.get("limit", 20)), 100)  # max 100
+    offset = int(request.args.get("offset", 0))
+
+    if user_id == '':
+        return jsonify({'error': 'User ID not provided'}), 400
 
     cur.execute("SELECT * FROM \"Users\" WHERE id = %s", (user_id, ))
     if not cur.fetchone():
         return jsonify({'error': 'User does not exist.'}), 400
-    
+
+    conditions = ["user_id = %s"]
+    params = [user_id]
+
+    query = '''
+        SELECT id, raw_entry, cleaned_entry, COUNT(*) OVER() AS total_records
+        FROM journal_entries
+    '''
+
     try:
-        cur.execute('''
-                    SELECT raw_entry, cleaned_entry
-                    FROM journal_entries
-                    WHERE user_id = %s and id = %s
-                    ''', (user_id, entry_id))
+        if entry_id:
+            conditions.append('id = %s')
+            params.append(entry_id)
+
+        if fromDate:
+            fromDate += ' 00:00:00'
+            conditions.append('created_at >= %s')
+            params.append(fromDate)
+        
+        if toDate:
+            toDate += ' 23:59:59'
+            conditions.append('created_at <= %s')
+            params.append(toDate)
+        
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        offset = (page - 1) * page_size
+        
+        query += """
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """
+        params.extend([page_size, offset])
+        cur.execute(query, tuple(params))
         
     except Exception as e:
         return jsonify({"message": f"Database transaction error: {e}"})
     
     rows = cur.fetchall()
-    if len(rows) == 0:
-        return jsonify({"message": "No entry with requested id exists"})
+    totalCount = rows[0].get('total_records') if rows else 0
 
-    else:
-        return jsonify({"entry": rows})
+    return jsonify({
+        "entries": rows,
+        "page": page,
+        "pageSize": page_size,
+        "total_count": totalCount 
+        }), 200
 
 @entries_bp.route('/update', methods=['POST'])
 def update_entry():
