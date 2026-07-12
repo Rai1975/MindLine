@@ -65,15 +65,19 @@ def create_pattern():
             return jsonify({"message": f"Error: {e}"})
 
         try:
-            records, summary, keys = driver.execute_query(
+            results = driver.execute_query(
                 query,
                 pattern_title=pattern_title,
                 user_id=user_id,
                 entry_ids=entry_ids,
                 entities=entities
             )
-
-            return jsonify({"records": records, "summary": summary, "keys": keys, "message": "Success"})
+            records = [record.data() for record in results.records]
+            return jsonify({
+                "records": records,
+                "summary": results.summary.counters.__dict__,  # see note below
+                "message": "Success"
+            })
 
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
