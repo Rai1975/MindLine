@@ -1,6 +1,5 @@
 from flask import jsonify, request, Blueprint
 from src.backend.entry_analysis.text_operations import textCleaner as textPipeline
-import threading
 from src.backend.entry_analysis.pipeline import final_pipeline as finalPipeline
 from src.backend.controllers.stim_controller import new_stim, new_dropped_stim
 from src.backend.db_config import connect_sql_db, run_neo4j_query, run_psql_query
@@ -8,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from src.backend.auth import login_required, generate_token
 from src.backend.classes.entry import Entry
 from src.backend.classes.stimulus import Stimulus
+import threading
 
 entries_bp = Blueprint('entries', __name__, url_prefix='/api/entries')
 
