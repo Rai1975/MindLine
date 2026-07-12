@@ -95,9 +95,16 @@ def new_entry(
         timeout=999999
     )
 
-
-if __name__ == "__main__":
-    print(new_entry(
-        user_id=4,
-        raw_entry= "Today, I feel great! Shawn and I played pickleball, and I love pickleball"
-    ))
+def keyword_search(
+    user_id='',
+    keyword=''
+):
+    return call_api(
+        method='POST',
+        url=f'{BACKEND_URL}/api/entries/keywordSearch',
+        json_body={
+            "user_id": user_id,
+            "keyword": keyword
+        },
+        timeout=999
+    )
