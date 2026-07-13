@@ -20,6 +20,20 @@ def get_boto_session() -> boto3.Session:
     return boto3.Session(profile_name=profile, region_name=region)
 
 
+'''
+Supervisor agent workflow.
+Do we need 2 supervisor agents? 
+
+one to check on existing patterns
+one to check on new upcoming patterns
+
+Why not have them as sub-agents that run concurrently?
+
+-> Check 
+
+progress -> Store IDs man and just keep a chron summary thing
+'''
+
 SUPERVISOR_AGENT_PROMPT = """
 You are an expert pattern identifer and recurring theme identifier.
 
