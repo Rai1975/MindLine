@@ -191,6 +191,65 @@ def read_entries():
         }), 200
 
 
+@entries_bp.route('/readCount', methods=['GET'])
+def read_entry_stim_count():
+    cur, conn = connect_sql_db()
+    fromDate = request.args.get('fromDate', '')
+    toDate = request.args.get('toDate', '')
+    user_id = request.args.get('user_id', '')
+    limit = min(int(request.args.get('limit', 10)), 100)
+
+    if user_id == '':
+        return jsonify({"message": "User ID needs to be provided"}), 400
+
+    conditions = ["je.user_id = %s"]
+    params = [int(user_id)]
+
+    if fromDate:
+        fromDate += ' 00:00:00'
+        conditions.append('je.created_at >= %s')
+        params.append(fromDate)
+    if toDate:
+        toDate += ' 23:59:59'
+        conditions.append('je.created_at <= %s')
+        params.append(toDate)
+
+    query = '''
+        SELECT
+            s.id,
+            s.entity,
+            COUNT(*) AS occurrence_count
+        FROM stimuli_emotions se
+        JOIN stimuli s ON s.user_id = se.user_id AND s.id = se.entity_id
+        JOIN journal_entries je ON je.id = se.entry_id AND je.user_id = se.user_id
+    '''
+
+    try:
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+
+        query += '''
+            GROUP BY s.id, s.entity
+            ORDER BY occurrence_count DESC
+            LIMIT %s
+        '''
+        params.append(limit)
+
+        cur.execute(query, tuple(params))
+        rows = cur.fetchall()
+
+    except Exception as e:
+        return jsonify({"message": f"Database transaction error: {e}"}), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({
+        "top_stims": rows,
+        "count": len(rows)
+    }), 200
+
 @entries_bp.route('/update', methods=['POST'])
 def update_entry():
     data = request.get_json()
