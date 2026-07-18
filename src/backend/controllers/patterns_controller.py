@@ -237,3 +237,61 @@ def add_entity_to_pattern():
 
         except Exception as e:
             return jsonify({"message": f"Database transaction error: {e}"})
+
+@patterns_bp.route('/add_entry', methods=['POST'])
+def add_entry_to_pattern():
+    body = request.get_json(silent=True) or {}
+
+    user_id = body.get('user_id', '')
+    pattern_name = body.get('pattern_name', '')
+    entry_id = body.get('entry_id', '')
+
+    if user_id == '' or pattern_name == '' or entry_id == '':
+        return jsonify({"message": "Missing required params"})
+
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return jsonify({"message": "user_id must be an integer"})
+
+    params = {
+        "user_id": user_id,
+        "pattern_name": pattern_name,
+        "entry_id": entry_id,
+    }
+
+    # entry_ids is a list property, not a node, so we can't MERGE our way
+    # to dedup like the entity route does — guard with CASE instead so
+    # re-adding the same entry_id is a no-op rather than a duplicate.
+    query = '''
+    MATCH (p:Pattern {user_id: $user_id, pattern_title: $pattern_name})
+    SET p.entry_ids = CASE
+        WHEN $entry_id IN coalesce(p.entry_ids, [])
+            THEN p.entry_ids
+        ELSE coalesce(p.entry_ids, []) + $entry_id
+    END
+    RETURN {
+        pattern_title: p.pattern_title,
+        entry_ids: p.entry_ids
+    } AS result
+    '''
+
+    with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
+        try:
+            driver.verify_connectivity()
+        except Exception as e:
+            return jsonify({"message": f"Error: {e}"})
+
+        try:
+            records = driver.execute_query(query, **params)
+            data = [record for record in records.records]
+
+            if not data:
+                return jsonify({
+                    "message": f"No pattern found for user_id={user_id} with pattern_name='{pattern_name}'"
+                }), 404
+
+            return jsonify({"record": data[0], "message": "Success"})
+
+        except Exception as e:
+            return jsonify({"message": f"Database transaction error: {e}"})
