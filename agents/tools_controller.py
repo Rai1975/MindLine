@@ -142,6 +142,7 @@ def read_patterns(
 def add_entity_to_pattern(
     user_id='',
     pattern_name='',
+    pattern_summary='',
     entity_id='',
     entity_name=''
 ):
@@ -160,6 +161,7 @@ def add_entity_to_pattern(
 def add_entry_to_pattern(
     user_id='',
     pattern_name='',
+    pattern_summary='',
     entry_id=''
 ):
     return call_api(

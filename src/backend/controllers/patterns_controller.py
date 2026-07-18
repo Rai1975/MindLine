@@ -175,85 +175,77 @@ entity <-connects(?)-> pattern
 @patterns_bp.route('/add_entity', methods=['POST'])
 def add_entity_to_pattern():
     body = request.get_json(silent=True) or {}
-
     user_id = body.get('user_id', '')
     pattern_name = body.get('pattern_name', '')
+    pattern_summary = body.get('pattern_summary', '')
     entity_id = body.get('entity_id', '')
     entity_name = body.get('entity_name', '')
-
-    if user_id == '' or pattern_name == '' or entity_id == '' or entity_name == '':
+    if user_id == '' or pattern_name == '' or pattern_summary == '' or entity_id == '' or entity_name == '':
         return jsonify({"message": "Missing required params"})
-
     try:
         user_id = int(user_id)
     except ValueError:
         return jsonify({"message": "user_id must be an integer"})
-
     params = {
         "user_id": user_id,
         "pattern_name": pattern_name,
+        "pattern_summary": pattern_summary,
         "entity_id": entity_id,
         "entity_name": entity_name,
     }
-
     # MERGE on (user_id, entity_id) so an existing entity is reused/connected
     # instead of a duplicate being created. entity_name is refreshed either way
     # in case it changed (e.g. renamed) since the entity was first created.
     query = '''
     MATCH (p:Pattern {user_id: $user_id, pattern_title: $pattern_name})
+    SET p.pattern_summary = $pattern_summary
     MERGE (e:Entity {user_id: $user_id, entity_id: $entity_id})
     ON CREATE SET e.entity_name = $entity_name
     ON MATCH SET e.entity_name = $entity_name
     MERGE (p)-[:CONNECTS]->(e)
     RETURN {
         pattern_title: p.pattern_title,
+        pattern_summary: p.pattern_summary,
         entity_id: e.entity_id,
         entity_name: e.entity_name
     } AS result
     '''
-
     with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
         try:
             driver.verify_connectivity()
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
-
         try:
             records = driver.execute_query(query, **params)
             data = [record for record in records.records]
-
             if not data:
                 return jsonify({
                     "message": f"No pattern found for user_id={user_id} with pattern_name='{pattern_name}'"
                 }), 404
-
             return jsonify({"record": data[0], "message": "Success"})
-
         except Exception as e:
             return jsonify({"message": f"Database transaction error: {e}"})
+
 
 @patterns_bp.route('/add_entry', methods=['POST'])
 def add_entry_to_pattern():
     body = request.get_json(silent=True) or {}
-
     user_id = body.get('user_id', '')
     pattern_name = body.get('pattern_name', '')
+    pattern_summary = body.get('pattern_summary', '')
     entry_id = body.get('entry_id', '')
-
-    if user_id == '' or pattern_name == '' or entry_id == '':
+    if user_id == '' or pattern_name == '' or pattern_summary == '' or entry_id == '':
         return jsonify({"message": "Missing required params"})
-
     try:
         user_id = int(user_id)
     except ValueError:
         return jsonify({"message": "user_id must be an integer"})
-
     params = {
         "user_id": user_id,
         "pattern_name": pattern_name,
+        "pattern_summary": pattern_summary,
         "entry_id": entry_id,
     }
-
     # entry_ids is a list property, not a node, so we can't MERGE our way
     # to dedup like the entity route does — guard with CASE instead so
     # re-adding the same entry_id is a no-op rather than a duplicate.
@@ -263,29 +255,26 @@ def add_entry_to_pattern():
         WHEN $entry_id IN coalesce(p.entry_ids, [])
             THEN p.entry_ids
         ELSE coalesce(p.entry_ids, []) + $entry_id
-    END
+    END,
+    p.pattern_summary = $pattern_summary
     RETURN {
         pattern_title: p.pattern_title,
+        pattern_summary: p.pattern_summary,
         entry_ids: p.entry_ids
     } AS result
     '''
-
     with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
         try:
             driver.verify_connectivity()
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
-
         try:
             records = driver.execute_query(query, **params)
             data = [record for record in records.records]
-
             if not data:
                 return jsonify({
                     "message": f"No pattern found for user_id={user_id} with pattern_name='{pattern_name}'"
                 }), 404
-
             return jsonify({"record": data[0], "message": "Success"})
-
         except Exception as e:
             return jsonify({"message": f"Database transaction error: {e}"})
