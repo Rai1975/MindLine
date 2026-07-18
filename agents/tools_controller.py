@@ -54,6 +54,8 @@ def grab_patterns(user_id):
         }
     )
 
+# Entry-level tools
+
 # Definitely need to clean up outputs here
 def read_entries(
     user_id='', 
@@ -81,20 +83,6 @@ def read_entries(
         }
     )
 
-def new_entry(
-    user_id='',
-    raw_entry=''
-):
-    return call_api(
-        method='POST',
-        url=f"{BACKEND_URL}/api/entries/create",
-        json_body={
-            "user_id": user_id,
-            "raw_entry": raw_entry
-        },
-        timeout=999999
-    )
-
 def keyword_search(
     user_id='',
     keyword=''
@@ -108,3 +96,88 @@ def keyword_search(
         },
         timeout=999
     )
+
+# Pattern level calls
+def create_pattern(
+    user_id='',
+    pattern_title='',
+    pattern_summary='',
+    entry_ids=[],
+    entities=[]
+):
+    return call_api(
+        method= 'POST',
+        url=f'{BACKEND_URL}/api/patterns/create_pattern',
+        json_body={
+            "user_id": user_id,
+            "pattern_title": pattern_title,
+            "pattern_summary": pattern_summary,
+            "entry_ids": entry_ids,
+            "entities": entities
+        },
+        timeout=30
+    )
+
+def read_patterns(
+    user_id='',
+    pattern_name='',
+    entry_id='',
+    entity='',
+    page=1,
+    page_size=20
+):
+    return call_api(
+        method='GET',
+        url=f'{BACKEND_URL}/api/patterns/find_patterns',
+        params={
+            "user_id": user_id,
+            "pattern_name": pattern_name,
+            "entry_id": entry_id,
+            "entity": entity,
+            "page": page,
+            "page_size": page_size
+        }
+    )
+
+def add_entity_to_pattern(
+    user_id='',
+    pattern_name='',
+    entity_id='',
+    entity_name=''
+):
+    return call_api(
+        method='POST',
+        url=f'{BACKEND_URL}/api/patterns/add_entity',
+        json_body={
+            "user_id": user_id,
+            "pattern_name": pattern_name,
+            "entity_id": entity_id,
+            "entity_name": entity_name
+        },
+        timeout=30
+    )
+
+def add_entry_to_pattern(
+    user_id='',
+    pattern_name='',
+    entry_id=''
+):
+    return call_api(
+        method='POST',
+        url=f'{BACKEND_URL}/api/patterns/add_entry',
+        json_body={
+            "user_id": user_id,
+            "pattern_name": pattern_name,
+            "entry_id": entry_id
+        },
+        timeout=30
+    )
+
+if __name__ == "__main__":
+    test = add_entry_to_pattern(
+        user_id=4,
+        pattern_name='Obsession with coding',
+        entry_id=15
+    )
+
+    print(test)

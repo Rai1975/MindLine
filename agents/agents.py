@@ -34,6 +34,19 @@ Why not have them as sub-agents that run concurrently?
 progress -> Store IDs man and just keep a chron summary thing
 '''
 
+EXISTING_PATTERN_CHECKER_PROMPT = """
+You are a specialized supervisor agent that checks for patterns in existing journal data.
+
+## Your Role
+You will read through recent entries from the week and identify patterns that are visible.
+what 
+"""
+
+
+NEW_PATTERN_CHECKER_PROMPT = """
+
+"""
+
 SUPERVISOR_AGENT_PROMPT = """
 You are an expert pattern identifer and recurring theme identifier.
 

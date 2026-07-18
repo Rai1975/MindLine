@@ -20,10 +20,10 @@ def create_pattern():
     data = request.get_json()
     user_id = data.get('user_id', '')
     pattern_title = data.get('pattern_title', '')
+    pattern_summary = data.get('pattern_summary', '')
     entry_ids = data.get('entry_ids', [])
     entities = data.get('entities', [])
-
-    if user_id == '' or pattern_title == '' or entry_ids == [] or entities==[]:
+    if user_id == '' or pattern_title == '' or pattern_summary == '' or entry_ids == [] or entities == []:
         return jsonify({"message": "Required params not provided"}), 403
     
     query = '''
@@ -32,7 +32,8 @@ def create_pattern():
         user_id: $user_id
     })
     ON CREATE SET
-        p.entry_ids = $entry_ids
+        p.entry_ids = $entry_ids,
+        p.pattern_summary = $pattern_summary
     ON MATCH SET
         p.entry_ids = REDUCE(
             ids = p.entry_ids,
@@ -41,33 +42,28 @@ def create_pattern():
                 WHEN id IN ids THEN ids
                 ELSE ids + id
             END
-        )
-
+        ),
+        p.pattern_summary = $pattern_summary
     WITH p
-
     UNWIND $entities AS entity
-
     MERGE (e:Entity {
         entity_id: entity.entity_id,
         user_id: $user_id
     })
     SET e.entity_name = entity.entity_name
-
     MERGE (p)-[:CONNECTS]->(e)
-
     RETURN p, collect(e) AS entities;
     '''
-
     with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
         try:
             driver.verify_connectivity()
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
-
         try:
             results = driver.execute_query(
                 query,
                 pattern_title=pattern_title,
+                pattern_summary=pattern_summary,
                 user_id=user_id,
                 entry_ids=entry_ids,
                 entities=entities
@@ -75,13 +71,11 @@ def create_pattern():
             records = [record.data() for record in results.records]
             return jsonify({
                 "records": records,
-                "summary": results.summary.counters.__dict__,  # see note below
+                "summary": results.summary.counters.__dict__,
                 "message": "Success"
             })
-
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
-    
 
 @patterns_bp.route('/find_patterns', methods=['GET'])
 def read_patterns():
