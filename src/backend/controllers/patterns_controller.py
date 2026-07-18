@@ -163,6 +163,76 @@ def read_patterns():
 
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
+
+@patterns_bp.route('/keyword_search', methods=['GET'])
+def keyword_search():
+    user_id = request.args.get('user_id', '')
+    keyword = request.args.get('keyword', '')
+    page = max(int(request.args.get('page', 1)), 1)
+    page_size = min(int(request.args.get('page_size', 20)), 100)
+    if user_id == '' or keyword == '':
+        return jsonify({"message": "Missing required params"})
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return jsonify({"message": "user_id must be an integer"})
+
+    # Split on whitespace so multi-word queries match as separate keywords
+    # rather than requiring the exact phrase. Each keyword must appear in
+    # EITHER the title or the summary (case-insensitive), and all keywords
+    # must be satisfied (AND across keywords, OR across the two fields).
+    keywords = [k for k in keyword.strip().split() if k]
+    if not keywords:
+        return jsonify({"message": "Missing required params"})
+
+    skip = (page - 1) * page_size
+    params = {
+        "user_id": user_id,
+        "keywords": keywords,
+        "skip": skip,
+        "limit": page_size,
+    }
+
+    query = '''
+    MATCH (p:Pattern {user_id: $user_id})
+    WHERE ALL(kw IN $keywords WHERE
+        toLower(p.pattern_title) CONTAINS toLower(kw)
+        OR toLower(coalesce(p.pattern_summary, '')) CONTAINS toLower(kw)
+    )
+    OPTIONAL MATCH (p)-[:CONNECTS]->(e:Entity)
+    WITH
+        p,
+        collect({
+            entity_id: e.entity_id,
+            entity_name: e.entity_name
+        }) AS entities
+    RETURN {
+        pattern_title: p.pattern_title,
+        pattern_summary: p.pattern_summary,
+        user_id: p.user_id,
+        entry_ids: p.entry_ids,
+        entities: entities
+    } AS pattern
+    ORDER BY p.pattern_title
+    SKIP $skip
+    LIMIT $limit
+    '''
+    with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
+        try:
+            driver.verify_connectivity()
+        except Exception as e:
+            return jsonify({"message": f"Error: {e}"})
+        try:
+            records = driver.execute_query(query, **params)
+            data = [record for record in records.records]
+            return jsonify({
+                "records": data,
+                "page": page,
+                "pageSize": page_size,
+                "message": "Success"
+            })
+        except Exception as e:
+            return jsonify({"message": f"Error: {e}"})
                 
 """
 Schema

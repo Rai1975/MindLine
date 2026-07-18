@@ -175,11 +175,27 @@ def add_entry_to_pattern(
         timeout=30
     )
 
+def keyword_search_patterns(
+    user_id='',
+    keyword='',
+    page=1,
+    page_size=10
+):
+    return call_api(
+        method='GET',
+        url=f'{BACKEND_URL}/api/patterns/keyword_search',
+        params={
+            "user_id": user_id,
+            "keyword": keyword,
+            "page": page,
+            "page_size": page_size
+        }
+    )
+
 if __name__ == "__main__":
-    test = add_entry_to_pattern(
+    test = keyword_search_patterns(
         user_id=4,
-        pattern_name='Obsession with coding',
-        entry_id=15
+        keyword="homesick"
     )
 
     print(test)
