@@ -83,35 +83,72 @@ def create_pattern():
             return jsonify({"message": f"Error: {e}"})
     
 
-
 @patterns_bp.route('/find_patterns', methods=['GET'])
 def read_patterns():
     user_id = request.args.get('user_id', '')
+    pattern_name = request.args.get('pattern_name', '')
+    entry_id = request.args.get('entry_id', '')
+    entity = request.args.get('entity', '')
+    page = max(int(request.args.get('page', 1)), 1)
+    page_size = min(int(request.args.get('page_size', 20)), 100)
 
     if user_id == '':
         return jsonify({"message": "Missing required params"})
-    
+
     user_id = int(user_id)
-    
-    query = '''
-    MATCH (p:Pattern {
-    user_id: $user_id
-    })
+
+    conditions = []
+    params = {"user_id": user_id}
+
+    if pattern_name:
+        conditions.append("p.pattern_title CONTAINS $pattern_name")
+        params["pattern_name"] = pattern_name
+
+    if entry_id:
+        # entry_ids is a list property on Pattern; membership check
+        conditions.append("$entry_id IN p.entry_ids")
+        params["entry_id"] = int(entry_id)
+
+    # Use EXISTS so filtering by entity doesn't strip other entities
+    # off the same pattern's aggregated `entities` array.
+    if entity:
+        conditions.append('''
+            EXISTS {
+                MATCH (p)-[:CONNECTS]->(e2:Entity)
+                WHERE e2.entity_name = $entity
+            }
+        ''')
+        params["entity"] = entity
+
+    where_clause = ""
+    if conditions:
+        where_clause = "WHERE " + " AND ".join(conditions)
+
+    skip = (page - 1) * page_size
+    params["skip"] = skip
+    params["limit"] = page_size
+
+    query = f'''
+    MATCH (p:Pattern {{user_id: $user_id}})
+    {where_clause}
     OPTIONAL MATCH (p)-[:CONNECTS]->(e:Entity)
 
     WITH
         p,
-        collect({
+        collect({{
             entity_id: e.entity_id,
             entity_name: e.entity_name
-        }) AS entities
+        }}) AS entities
 
-    RETURN {
+    RETURN {{
         pattern_title: p.pattern_title,
         user_id: p.user_id,
         entry_ids: p.entry_ids,
         entities: entities
-    } AS pattern;
+    }} AS pattern
+    ORDER BY p.pattern_title
+    SKIP $skip
+    LIMIT $limit
     '''
 
     with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
@@ -121,14 +158,18 @@ def read_patterns():
             return jsonify({"message": f"Error: {e}"})
 
         try:
-            records = driver.execute_query(query, user_id=user_id)
+            records = driver.execute_query(query, **params)
             data = [record for record in records.records]
-            return jsonify({"records": data, "message": "Success"})
+            return jsonify({
+                "records": data,
+                "page": page,
+                "pageSize": page_size,
+                "message": "Success"
+            })
 
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
-    
-
+                
 """
 Schema
 entity_name: string
@@ -139,4 +180,11 @@ entity <-connects(?)-> pattern
 """
 @patterns_bp.route('/create_entity', methods=['POST'])
 def create_object():
-    pass
+    data = request.get_json()
+    user_id = data.get('user_id', '')
+    pattern_id = data.get('pattern_id', '')
+    entity_id = data.get('entity_id', '')
+    entity_name = data.get('entity_name', '')
+
+    if user_id == '':
+        return jsonify({"message": "User ID is required"})
