@@ -14,46 +14,54 @@ entry_ids: [integer]
 
 pattern <-connects(?)-> entity 
 """
-# Fix return error
 @patterns_bp.route('/create_pattern', methods=['POST'])
 def create_pattern():
     data = request.get_json()
     user_id = data.get('user_id', '')
     pattern_title = data.get('pattern_title', '')
     pattern_summary = data.get('pattern_summary', '')
-    entry_ids = data.get('entry_ids', [])
+    entries = data.get('entries', [])  # [{ "entry_id": 11, "date": "...", "rationale": "..." }, ...]
     entities = data.get('entities', [])
-    if user_id == '' or pattern_title == '' or pattern_summary == '' or entry_ids == [] or entities == []:
+
+    if user_id == '' or pattern_title == '' or pattern_summary == '' or entries == [] or entities == []:
         return jsonify({"message": "Required params not provided"}), 403
-    
+
+    # Validate entry shape up front so bad data doesn't silently create half-populated nodes
+    for entry in entries:
+        if not all(k in entry for k in ('entry_id', 'date', 'rationale')):
+            return jsonify({"message": "Each entry requires entry_id, date, and rationale"}), 403
+
     query = '''
         MERGE (p:Pattern {
-        pattern_title: $pattern_title,
-        user_id: $user_id
-    })
-    ON CREATE SET
-        p.entry_ids = $entry_ids,
-        p.pattern_summary = $pattern_summary
-    ON MATCH SET
-        p.entry_ids = REDUCE(
-            ids = p.entry_ids,
-            id IN $entry_ids |
-            CASE
-                WHEN id IN ids THEN ids
-                ELSE ids + id
-            END
-        ),
-        p.pattern_summary = $pattern_summary
-    WITH p
-    UNWIND $entities AS entity
-    MERGE (e:Entity {
-        entity_id: entity.entity_id,
-        user_id: $user_id
-    })
-    SET e.entity_name = entity.entity_name
-    MERGE (p)-[:CONNECTS]->(e)
-    RETURN p, collect(e) AS entities;
+            pattern_title: $pattern_title,
+            user_id: $user_id
+        })
+        ON CREATE SET
+            p.pattern_summary = $pattern_summary
+        ON MATCH SET
+            p.pattern_summary = $pattern_summary
+        WITH p
+        UNWIND $entries AS entry
+        MERGE (en:Entry {
+            entry_id: entry.entry_id,
+            user_id: $user_id
+        })
+        ON CREATE SET
+            en.date = entry.date
+        MERGE (p)-[r:HAS_ENTRY]->(en)
+        SET r.rationale = entry.rationale,
+            r.date = entry.date
+        WITH p, collect(DISTINCT en) AS entries
+        UNWIND $entities AS entity
+        MERGE (e:Entity {
+            entity_id: entity.entity_id,
+            user_id: $user_id
+        })
+        SET e.entity_name = entity.entity_name
+        MERGE (p)-[:CONNECTS]->(e)
+        RETURN p, entries, collect(DISTINCT e) AS entities;
     '''
+
     with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
         try:
             driver.verify_connectivity()
@@ -65,7 +73,7 @@ def create_pattern():
                 pattern_title=pattern_title,
                 pattern_summary=pattern_summary,
                 user_id=user_id,
-                entry_ids=entry_ids,
+                entries=entries,
                 entities=entities
             )
             records = [record.data() for record in results.records]
