@@ -85,6 +85,7 @@ def create_pattern():
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
 
+
 @patterns_bp.route('/find_patterns', methods=['GET'])
 def read_patterns():
     user_id = request.args.get('user_id', '')
@@ -106,13 +107,18 @@ def read_patterns():
         conditions.append("p.pattern_title CONTAINS $pattern_name")
         params["pattern_name"] = pattern_name
 
+    # entries now live as Entry nodes off HAS_ENTRY, not a list property on
+    # Pattern, so use EXISTS the same way entity filtering already does —
+    # this also avoids stripping other entries off the aggregated `entries` array.
     if entry_id:
-        # entry_ids is a list property on Pattern; membership check
-        conditions.append("$entry_id IN p.entry_ids")
+        conditions.append('''
+            EXISTS {
+                MATCH (p)-[:HAS_ENTRY]->(en2:Entry)
+                WHERE en2.entry_id = $entry_id
+            }
+        ''')
         params["entry_id"] = int(entry_id)
 
-    # Use EXISTS so filtering by entity doesn't strip other entities
-    # off the same pattern's aggregated `entities` array.
     if entity:
         conditions.append('''
             EXISTS {
@@ -133,19 +139,28 @@ def read_patterns():
     query = f'''
     MATCH (p:Pattern {{user_id: $user_id}})
     {where_clause}
-    OPTIONAL MATCH (p)-[:CONNECTS]->(e:Entity)
-
+    OPTIONAL MATCH (p)-[r:HAS_ENTRY]->(en:Entry)
     WITH
         p,
-        collect({{
+        collect(DISTINCT {{
+            entry_id: en.entry_id,
+            date: en.date,
+            rationale: r.rationale
+        }}) AS entries
+    OPTIONAL MATCH (p)-[:CONNECTS]->(e:Entity)
+    WITH
+        p,
+        entries,
+        collect(DISTINCT {{
             entity_id: e.entity_id,
             entity_name: e.entity_name
         }}) AS entities
 
     RETURN {{
         pattern_title: p.pattern_title,
+        pattern_summary: p.pattern_summary,
         user_id: p.user_id,
-        entry_ids: p.entry_ids,
+        entries: entries,
         entities: entities
     }} AS pattern
     ORDER BY p.pattern_title
@@ -172,6 +187,7 @@ def read_patterns():
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
 
+
 @patterns_bp.route('/keyword_search', methods=['GET'])
 def keyword_search():
     user_id = request.args.get('user_id', '')
@@ -185,10 +201,6 @@ def keyword_search():
     except ValueError:
         return jsonify({"message": "user_id must be an integer"})
 
-    # Split on whitespace so multi-word queries match as separate keywords
-    # rather than requiring the exact phrase. Each keyword must appear in
-    # EITHER the title or the summary (case-insensitive), and all keywords
-    # must be satisfied (AND across keywords, OR across the two fields).
     keywords = [k for k in keyword.strip().split() if k]
     if not keywords:
         return jsonify({"message": "Missing required params"})
@@ -207,10 +219,19 @@ def keyword_search():
         toLower(p.pattern_title) CONTAINS toLower(kw)
         OR toLower(coalesce(p.pattern_summary, '')) CONTAINS toLower(kw)
     )
+    OPTIONAL MATCH (p)-[r:HAS_ENTRY]->(en:Entry)
+    WITH
+        p,
+        collect(DISTINCT {
+            entry_id: en.entry_id,
+            date: en.date,
+            rationale: r.rationale
+        }) AS entries
     OPTIONAL MATCH (p)-[:CONNECTS]->(e:Entity)
     WITH
         p,
-        collect({
+        entries,
+        collect(DISTINCT {
             entity_id: e.entity_id,
             entity_name: e.entity_name
         }) AS entities
@@ -218,7 +239,7 @@ def keyword_search():
         pattern_title: p.pattern_title,
         pattern_summary: p.pattern_summary,
         user_id: p.user_id,
-        entry_ids: p.entry_ids,
+        entries: entries,
         entities: entities
     } AS pattern
     ORDER BY p.pattern_title
@@ -241,7 +262,8 @@ def keyword_search():
             })
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
-                
+
+            
 """
 Schema
 entity_name: string
@@ -312,35 +334,46 @@ def add_entry_to_pattern():
     pattern_name = body.get('pattern_name', '')
     pattern_summary = body.get('pattern_summary', '')
     entry_id = body.get('entry_id', '')
-    if user_id == '' or pattern_name == '' or pattern_summary == '' or entry_id == '':
+    date = body.get('date', '')
+    rationale = body.get('rationale', '')
+
+    if user_id == '' or pattern_name == '' or pattern_summary == '' or entry_id == '' or date == '' or rationale == '':
         return jsonify({"message": "Missing required params"})
+
     try:
         user_id = int(user_id)
     except ValueError:
         return jsonify({"message": "user_id must be an integer"})
+
     params = {
         "user_id": user_id,
         "pattern_name": pattern_name,
         "pattern_summary": pattern_summary,
         "entry_id": entry_id,
+        "date": date,
+        "rationale": rationale,
     }
-    # entry_ids is a list property, not a node, so we can't MERGE our way
-    # to dedup like the entity route does — guard with CASE instead so
-    # re-adding the same entry_id is a no-op rather than a duplicate.
+
+    # Entry is now its own node, so MERGE handles dedup for us: re-adding the
+    # same entry_id just matches the existing node/relationship instead of
+    # duplicating anything, no CASE guard needed like the old list-property version.
     query = '''
     MATCH (p:Pattern {user_id: $user_id, pattern_title: $pattern_name})
-    SET p.entry_ids = CASE
-        WHEN $entry_id IN coalesce(p.entry_ids, [])
-            THEN p.entry_ids
-        ELSE coalesce(p.entry_ids, []) + $entry_id
-    END,
-    p.pattern_summary = $pattern_summary
+    SET p.pattern_summary = $pattern_summary
+    MERGE (en:Entry {entry_id: $entry_id, user_id: $user_id})
+    ON CREATE SET en.date = $date
+    MERGE (p)-[r:HAS_ENTRY]->(en)
+    SET r.rationale = $rationale,
+        r.date = $date
     RETURN {
         pattern_title: p.pattern_title,
         pattern_summary: p.pattern_summary,
-        entry_ids: p.entry_ids
+        entry_id: en.entry_id,
+        entry_date: en.date,
+        rationale: r.rationale
     } AS result
     '''
+
     with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
         try:
             driver.verify_connectivity()

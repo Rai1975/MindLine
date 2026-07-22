@@ -7,6 +7,7 @@ import json
 import boto3
 from strands import Agent
 from strands.models import BedrockModel
+from agents.tools_controller import grab_patterns, read_entries, keyword_search, create_pattern, read_patterns, add_entity_to_pattern, add_entry_to_pattern, keyword_search_patterns
 
 def get_boto_session() -> boto3.Session:
     """
