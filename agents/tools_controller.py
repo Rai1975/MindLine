@@ -443,3 +443,118 @@ def keyword_search_patterns(
             "page_size": page_size
         }
     )
+
+@tool
+def get_entity_stims(
+    entity_id: int,
+    user_id: int,
+    page: int = 1,
+    pageSize: int = 10
+) -> dict:
+    """
+    Fetch emotional stimuli data attached to a specific entity. Stimuli are grounded,
+    directly-sourced records of adjectives and sentences associated with an entity and
+    their sentiment scores — independent of any pattern or entry inference. Use this to
+    verify or cross-check emotional associations with an entity against grounded truth,
+    rather than relying solely on entries/patterns' inferred emotional framing.
+
+    Args:
+        entity_id (int): The unique identifier of the entity (stimulus) to fetch data for.
+        user_id (int): The unique identifier of the user who owns this data.
+        page (int): Page number for pagination. Defaults to 1.
+        pageSize (int): Number of records per page. Defaults to 10.
+
+    Returns:
+        dict: {
+            "page": int,
+            "pageSize": int,
+            "data": [
+                {
+                    "entity": str,                    # the entity's name
+                    "adjective": str,                 # adjective associated with the entity
+                    "sentence": str,                  # source sentence the adjective was drawn from
+                    "sentence_sentiment": float|str,  # sentiment score/label for the sentence
+                    "adjective_sentiment": float|str, # sentiment score/label for the adjective itself
+                    "e1": ...,                        # additional emotion-related field
+                    "e2": ...,                         # additional emotion-related field
+                    "e3": ...                          # additional emotion-related field
+                },
+                ...
+            ]
+        }
+        Returns an empty "data" list if no stimuli are found, or an error message if the
+        request fails.
+    """
+    try:
+        entity_id = int(entity_id)
+        user_id = int(user_id)
+        page = int(page)
+        pageSize = int(pageSize)
+    except (ValueError, TypeError):
+        return {"error": "entity_id, user_id, page, and pageSize must be integers"}
+
+    return call_api(
+        method="GET",
+        url=f"{BACKEND_URL}/api/stims/getEntityStims",
+        params={
+            "entity_id": entity_id,
+            "user_id": user_id,
+            "page": page,
+            "pageSize": pageSize
+        }
+    )
+
+@tool
+def read_entry_stim_count(
+    user_id: int,
+    fromDate: str = '',
+    toDate: str = '',
+    limit: int = 10
+) -> dict:
+    """
+    Get the top recurring entities (stimuli) mentioned across a user's journal entries,
+    ranked by occurrence count, optionally scoped to a date range. This is the
+    starting point for pattern detection — use it to identify which entities show
+    up repeatedly before digging into their emotional data or entry content.
+
+    Args:
+        user_id (int): The unique identifier of the user whose entries should be counted.
+        fromDate (str, optional): Start of the date range filter, e.g. "2026-07-01".
+            Omit to count from the beginning of the user's history.
+        toDate (str, optional): End of the date range filter, e.g. "2026-07-21".
+            Omit to count through the most recent entries.
+        limit (int): Max number of top entities to return, ranked by occurrence count
+            descending. Capped at 100 server-side. Defaults to 10.
+
+    Returns:
+        dict: {
+            "top_stims": [
+                {
+                    "id": int,                  # entity_id, for use with get_entity_stims etc.
+                    "entity": str,              # entity name
+                    "occurrence_count": int     # number of times this entity appeared
+                },
+                ...
+            ],
+            "count": int   # number of entities returned
+        }
+        or an error message if the request fails.
+    """
+    try:
+        user_id = int(user_id)
+        fromDate = str(fromDate)
+        toDate = str(toDate)
+        limit = int(limit)
+    except (ValueError, TypeError):
+        return {"error": "user_id and limit must be integers"}
+
+    return call_api(
+        method="GET",
+        url=f"{BACKEND_URL}/api/entries/readCount",
+        params={
+            "user_id": user_id,
+            "fromDate": fromDate,
+            "toDate": toDate,
+            "limit": limit
+        }
+    )
