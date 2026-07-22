@@ -558,3 +558,61 @@ def read_entry_stim_count(
             "limit": limit
         }
     )
+
+@tool
+def search_patterns_by_entity(
+    user_id: int,
+    entity_name: str,
+    page: int = 1,
+    page_size: int = 20
+) -> dict:
+    """
+    Find all patterns linked to a given entity, returning that entity's id along
+    with each linked pattern's title, summary, and the entries (with rationale)
+    attached to that pattern. Use this when you already know which entity you care
+    about and want to see the patterns/entries built around it, rather than
+    filtering patterns generically (use read_patterns for that).
+
+    Args:
+        user_id (int): The unique identifier of the user who owns this data.
+        entity_name (str): The display name of the entity to search by.
+        page (int): Page number for pagination. Defaults to 1.
+        page_size (int): Number of pattern results per page. Defaults to 20.
+
+    Returns:
+        dict: API response where each record contains:
+            {
+                "entity_id": str,
+                "entity_name": str,
+                "pattern_title": str,
+                "pattern_summary": str,
+                "entries": [
+                    {
+                        "entry_id": int,
+                        "date": str,
+                        "rationale": str
+                    },
+                    ...
+                ]
+            }
+        One record per pattern the entity is connected to. Returns an error message
+        if the entity isn't found or the request fails.
+    """
+    try:
+        user_id = int(user_id)
+        entity_name = str(entity_name)
+        page = int(page)
+        page_size = int(page_size)
+    except (ValueError, TypeError):
+        return {"error": "user_id, page, and page_size must be integers"}
+
+    return call_api(
+        method='GET',
+        url=f'{BACKEND_URL}/api/patterns/search_by_entity',
+        params={
+            "user_id": user_id,
+            "entity_name": entity_name,
+            "page": page,
+            "page_size": page_size
+        }
+    )

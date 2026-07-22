@@ -16,7 +16,8 @@ from agents.tools_controller import (
     add_entry_to_pattern,
     keyword_search_patterns,
     get_entity_stims,
-    read_entry_stim_count
+    read_entry_stim_count,
+    search_patterns_by_entity
 )
 
 
@@ -102,6 +103,9 @@ you. If a step's tools return nothing useful (no repeating entities, no non-neut
 stims, no clear pattern), stop and report that no pattern was found this run rather
 than forcing one into existence.
 """
+
+def summarize_patterns_agent(user_id: int) -> Agent:
+    pass
 
 
 def build_pattern_agent(user_id: int) -> Agent:

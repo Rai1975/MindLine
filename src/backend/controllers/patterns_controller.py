@@ -263,7 +263,7 @@ def keyword_search():
         except Exception as e:
             return jsonify({"message": f"Error: {e}"})
 
-            
+
 """
 Schema
 entity_name: string
@@ -387,5 +387,76 @@ def add_entry_to_pattern():
                     "message": f"No pattern found for user_id={user_id} with pattern_name='{pattern_name}'"
                 }), 404
             return jsonify({"record": data[0], "message": "Success"})
+        except Exception as e:
+            return jsonify({"message": f"Database transaction error: {e}"})
+
+@patterns_bp.route('/search_by_entity', methods=['GET'])
+def search_by_entity():
+    user_id = request.args.get('user_id', '')
+    entity_name = request.args.get('entity_name', '')
+    page = max(int(request.args.get('page', 1)), 1)
+    page_size = min(int(request.args.get('page_size', 20)), 100)
+
+    if user_id == '' or entity_name == '':
+        return jsonify({"message": "Missing required params"})
+
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return jsonify({"message": "user_id must be an integer"})
+
+    skip = (page - 1) * page_size
+    params = {
+        "user_id": user_id,
+        "entity_name": entity_name,
+        "skip": skip,
+        "limit": page_size,
+    }
+
+    # Start at the Entity, walk CONNECTS back to each Pattern it's attached
+    # to, then pull that Pattern's own HAS_ENTRY entries — entities don't
+    # have entries, patterns do.
+    query = '''
+    MATCH (e:Entity {user_id: $user_id, entity_name: $entity_name})
+    MATCH (e)<-[:CONNECTS]-(p:Pattern)
+    OPTIONAL MATCH (p)-[r:HAS_ENTRY]->(en:Entry)
+    WITH
+        e,
+        p,
+        collect(DISTINCT {
+            entry_id: en.entry_id,
+            date: en.date,
+            rationale: r.rationale
+        }) AS entries
+    RETURN {
+        entity_id: e.entity_id,
+        entity_name: e.entity_name,
+        pattern_title: p.pattern_title,
+        pattern_summary: p.pattern_summary,
+        entries: entries
+    } AS result
+    ORDER BY p.pattern_title
+    SKIP $skip
+    LIMIT $limit
+    '''
+
+    with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
+        try:
+            driver.verify_connectivity()
+        except Exception as e:
+            return jsonify({"message": f"Error: {e}"})
+        try:
+            records = driver.execute_query(query, **params)
+            data = [record for record in records.records]
+            if not data:
+                return jsonify({
+                    "message": f"No entity found for user_id={user_id} with entity_name='{entity_name}'"
+                }), 404
+            return jsonify({
+                "records": data,
+                "page": page,
+                "pageSize": page_size,
+                "message": "Success"
+            })
         except Exception as e:
             return jsonify({"message": f"Database transaction error: {e}"})
