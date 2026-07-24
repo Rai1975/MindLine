@@ -460,3 +460,64 @@ def search_by_entity():
             })
         except Exception as e:
             return jsonify({"message": f"Database transaction error: {e}"})
+
+# I am manually running the agent to insert data for this now. But eventually this will be automated haha.   
+@patterns_bp.route('/entity_details', methods=['GET'])
+def get_entity_details():
+    user_id = request.args.get('user_id', '')
+    entity_name = request.args.get('entity_name', '')
+    if user_id == '' or entity_name == '':
+        return jsonify({"message": "Missing required params"})
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return jsonify({"message": "user_id must be an integer"})
+    params = {"user_id": user_id, "entity_name": entity_name}
+
+    # Pattern has no dedicated pattern_id field — pattern_title is the only
+    # unique identifier (alongside user_id), so related_patterns is just a
+    # flat list of titles rather than {pattern_id, pattern_name} objects.
+    #
+    # related_entities walks e -> patterns -> other entities on those same
+    # patterns, excluding e itself and deduping across patterns (an entity
+    # co-occurring in 3 shared patterns still shows up once).
+    #
+    # insight_1/2/3 are collected into a list and filtered of nulls so a
+    # partially-filled or never-generated insight set doesn't leak None
+    # entries into the response.
+    query = '''
+    MATCH (e:Entity {user_id: $user_id, entity_name: $entity_name})
+    OPTIONAL MATCH (e)<-[:CONNECTS]-(p:Pattern)
+    WITH e, collect(DISTINCT p.pattern_title) AS related_patterns,
+    collect(DISTINCT p) AS patterns
+    UNWIND (CASE WHEN patterns = [] THEN [null] ELSE patterns END) AS pat
+    OPTIONAL MATCH (pat)-[:CONNECTS]->(e2:Entity)
+    WHERE pat IS NOT NULL AND e2.entity_id <> e.entity_id
+    WITH e, related_patterns, collect(DISTINCT {
+        entity_id: e2.entity_id,
+        entity_name: e2.entity_name
+    }) AS related_entities_raw
+    RETURN {
+        entity_id: e.entity_id,
+        entity_name: e.entity_name,
+        related_patterns: related_patterns,
+        related_entities: [x IN related_entities_raw WHERE x.entity_id IS NOT NULL],
+        bullets: [b IN [e.insight_1, e.insight_2, e.insight_3] WHERE b IS NOT NULL]
+    } AS result
+    '''
+
+    with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
+        try:
+            driver.verify_connectivity()
+        except Exception as e:
+            return jsonify({"message": f"Error: {e}"})
+        try:
+            records = driver.execute_query(query, **params)
+            data = [record for record in records.records]
+            if not data:
+                return jsonify({
+                    "message": f"No entity found for user_id={user_id} with entity_name='{entity_name}'"
+                }), 404
+            return jsonify({"record": data[0], "message": "Success"})
+        except Exception as e:
+            return jsonify({"message": f"Database transaction error: {e}"})
