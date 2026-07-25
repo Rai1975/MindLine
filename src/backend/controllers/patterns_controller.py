@@ -521,3 +521,180 @@ def get_entity_details():
             return jsonify({"record": data[0], "message": "Success"})
         except Exception as e:
             return jsonify({"message": f"Database transaction error: {e}"})
+
+@patterns_bp.route('/related_patterns', methods=['GET'])
+def get_related_patterns():
+    user_id = request.args.get('user_id', '')
+    pattern_name = request.args.get('pattern_name', '')
+
+    if user_id == '' or pattern_name == '':
+        return jsonify({"message": "Missing required params"})
+
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return jsonify({"message": "user_id must be an integer"})
+
+    params = {"user_id": user_id, "pattern_name": pattern_name}
+
+    # There's no direct Pattern-Pattern edge in the schema, so "related" is
+    # inferred two ways:
+    #   1. via_entity  — other patterns CONNECTS-ed to an entity this pattern
+    #      is also CONNECTS-ed to (e.g. both patterns involve "Liam")
+    #   2. via_entry   — other patterns HAS_ENTRY-linked to an entry this
+    #      pattern is also linked to (e.g. the same journal entry evidences
+    #      both patterns)
+    # Both are gathered separately, then merged/deduped per related pattern
+    # so a pattern related through both an entity AND an entry only shows up
+    # once, with both shared_entities and shared_entries populated.
+    query = '''
+    MATCH (p:Pattern {user_id: $user_id, pattern_title: $pattern_name})
+
+    OPTIONAL MATCH (p)-[:CONNECTS]->(e:Entity)<-[:CONNECTS]-(p2:Pattern)
+    WHERE p2.user_id = $user_id AND p2.pattern_title <> $pattern_name
+    WITH p, collect(DISTINCT {pattern: p2, entity_name: e.entity_name}) AS via_entity
+
+    OPTIONAL MATCH (p)-[:HAS_ENTRY]->(en:Entry)<-[:HAS_ENTRY]-(p3:Pattern)
+    WHERE p3.user_id = $user_id AND p3.pattern_title <> $pattern_name
+    WITH p, via_entity, collect(DISTINCT {pattern: p3, entry_id: en.entry_id}) AS via_entry
+
+    WITH p,
+        [x IN via_entity WHERE x.pattern IS NOT NULL] AS via_entity,
+        [x IN via_entry WHERE x.pattern IS NOT NULL] AS via_entry
+
+    UNWIND (
+        [x IN via_entity | x.pattern] + [x IN via_entry | x.pattern]
+    ) AS related_pattern
+    WITH p, via_entity, via_entry, related_pattern
+    WHERE related_pattern IS NOT NULL
+
+    WITH p, related_pattern,
+        [x IN via_entity WHERE x.pattern = related_pattern | x.entity_name] AS shared_entities,
+        [x IN via_entry WHERE x.pattern = related_pattern | x.entry_id] AS shared_entries
+
+    RETURN {
+        pattern_title: related_pattern.pattern_title,
+        pattern_summary: related_pattern.pattern_summary,
+        shared_entities: shared_entities,
+        shared_entries: shared_entries
+    } AS result
+    ORDER BY related_pattern.pattern_title
+    '''
+
+    with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
+        try:
+            driver.verify_connectivity()
+        except Exception as e:
+            return jsonify({"message": f"Error: {e}"})
+        try:
+            records = driver.execute_query(query, **params)
+            data = [record for record in records.records]
+            if not data:
+                return jsonify({
+                    "message": f"No related patterns found for pattern_name='{pattern_name}'"
+                }), 404
+            return jsonify({"records": data, "message": "Success"})
+        except Exception as e:
+            return jsonify({"message": f"Database transaction error: {e}"})
+
+@patterns_bp.route('/connect_patterns', methods=['POST'])
+def connect_patterns():
+    user_id = request.args.get('user_id', '')
+    pattern_name_1 = request.args.get('pattern_name_1', '')
+    pattern_name_2 = request.args.get('pattern_name_2', '')
+    rationale = request.args.get('rationale', '')
+    if user_id == '' or pattern_name_1 == '' or pattern_name_2 == '':
+        return jsonify({"message": "Missing required params"})
+    if pattern_name_1 == pattern_name_2:
+        return jsonify({"message": "pattern_name_1 and pattern_name_2 must be different patterns"})
+    if rationale == '':
+        return jsonify({"message": "Missing required param: rationale"})
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return jsonify({"message": "user_id must be an integer"})
+    params = {
+        "user_id": user_id,
+        "pattern_name_1": pattern_name_1,
+        "pattern_name_2": pattern_name_2,
+        "rationale": rationale
+    }
+    # Creates (or updates) a single, undirected RELATED_TO relationship
+    # between the two Pattern nodes. MERGE on an undirected pattern
+    # (p1)-[r]-(p2) will match an existing edge regardless of which
+    # direction it was originally created in, so calling this with
+    # (A, B) or (B, A) always resolves to the same relationship — no
+    # duplicate edges, no need to track order. If no edge exists yet,
+    # Neo4j creates one with an arbitrary internal direction, but since
+    # every read in this codebase matches undirected, that internal
+    # direction is never semantically meaningful.
+    query = '''
+    MATCH (p1:Pattern {user_id: $user_id, pattern_title: $pattern_name_1})
+    MATCH (p2:Pattern {user_id: $user_id, pattern_title: $pattern_name_2})
+    MERGE (p1)-[r:RELATED_TO]-(p2)
+    ON CREATE SET r.rationale = $rationale, r.created_at = datetime()
+    ON MATCH SET r.rationale = $rationale, r.updated_at = datetime()
+    RETURN {
+        pattern_1: p1.pattern_title,
+        pattern_2: p2.pattern_title,
+        rationale: r.rationale
+    } AS result
+    '''
+    with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
+        try:
+            driver.verify_connectivity()
+        except Exception as e:
+            return jsonify({"message": f"Error: {e}"})
+        try:
+            records = driver.execute_query(query, **params)
+            data = [record for record in records.records]
+            if not data:
+                return jsonify({
+                    "message": f"Could not connect patterns — one or both patterns not found "
+                               f"('{pattern_name_1}', '{pattern_name_2}')"
+                }), 404
+            return jsonify({"records": data, "message": "Success"})
+        except Exception as e:
+            return jsonify({"message": f"Database transaction error: {e}"})
+
+@patterns_bp.route('/connected_patterns', methods=['GET'])
+def get_connected_patterns():
+    user_id = request.args.get('user_id', '')
+    pattern_name = request.args.get('pattern_name', '')
+    if user_id == '' or pattern_name == '':
+        return jsonify({"message": "Missing required params"})
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        return jsonify({"message": "user_id must be an integer"})
+    params = {"user_id": user_id, "pattern_name": pattern_name}
+    # RELATED_TO is created directionally (p1 -> p2) by connect_patterns, but
+    # conceptually the relationship is symmetric — "A is related to B" implies
+    # "B is related to A". So we match the relationship in either direction
+    # here, rather than assuming this pattern is always the source.
+    query = '''
+    MATCH (p:Pattern {user_id: $user_id, pattern_title: $pattern_name})
+    MATCH (p)-[r:RELATED_TO]-(p2:Pattern)
+    WHERE p2.user_id = $user_id AND p2.pattern_title <> $pattern_name
+    RETURN {
+        pattern_title: p2.pattern_title,
+        pattern_summary: p2.pattern_summary,
+        rationale: r.rationale
+    } AS result
+    ORDER BY p2.pattern_title
+    '''
+    with GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_AUTH, NEO4J_PASSWORD)) as driver:
+        try:
+            driver.verify_connectivity()
+        except Exception as e:
+            return jsonify({"message": f"Error: {e}"})
+        try:
+            records = driver.execute_query(query, **params)
+            data = [record for record in records.records]
+            if not data:
+                return jsonify({
+                    "message": f"No connected patterns found for pattern_name='{pattern_name}'"
+                }), 404
+            return jsonify({"records": data, "message": "Success"})
+        except Exception as e:
+            return jsonify({"message": f"Database transaction error: {e}"})

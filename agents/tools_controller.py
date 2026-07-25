@@ -616,3 +616,132 @@ def search_patterns_by_entity(
             "page_size": page_size
         }
     )
+
+@tool
+def get_related_patterns(
+    user_id: int,
+    pattern_name: str
+) -> dict:
+    """
+    Find other patterns related to a given pattern, inferred through shared
+    entities (patterns connected to the same entity) and shared entries
+    (patterns linked to the same journal entry). Use this to explore how
+    patterns interconnect — e.g. whether two seemingly separate patterns are
+    actually tied together through a common person or a common entry.
+
+    Args:
+        user_id (int): The unique identifier of the user who owns this pattern.
+        pattern_name (str): The title of the pattern to find related patterns for.
+
+    Returns:
+        dict: API response where each record contains:
+            {
+                "pattern_title": str,
+                "pattern_summary": str,
+                "shared_entities": [str, ...],   # entity names connecting the two patterns
+                "shared_entries": [int, ...]     # entry ids connecting the two patterns
+            }
+        Returns an error message if the pattern isn't found or has no related patterns.
+    """
+    try:
+        user_id = int(user_id)
+        pattern_name = str(pattern_name)
+    except (ValueError, TypeError):
+        return {"error": "user_id must be an integer"}
+
+    return call_api(
+        method="GET",
+        url=f"{BACKEND_URL}/api/patterns/related_patterns",
+        params={
+            "user_id": user_id,
+            "pattern_name": pattern_name
+        }
+    )
+
+@tool
+def connect_patterns(
+    user_id: int,
+    pattern_name_1: str,
+    pattern_name_2: str,
+    rationale: str
+) -> dict:
+    """
+    Create a "related_to" connection between two patterns, with a rationale
+    explaining why they're connected. Use this when you've identified that
+    two patterns are meaningfully linked (e.g. they share an underlying
+    cause, one seems to trigger the other, they reflect the same theme from
+    different angles) and want to record that relationship for the user.
+    Calling this again for the same pair of patterns will update the
+    rationale rather than create a duplicate connection.
+    Args:
+        user_id (int): The unique identifier of the user who owns these patterns.
+        pattern_name_1 (str): The title of the first pattern.
+        pattern_name_2 (str): The title of the second pattern. Must be different from pattern_name_1.
+        rationale (str): Explanation of why these two patterns are related.
+    Returns:
+        dict: API response where the record contains:
+            {
+                "pattern_1": str,
+                "pattern_2": str,
+                "rationale": str
+            }
+        Returns an error message if either pattern isn't found, if the two
+        pattern names are the same, or if required params are missing.
+    """
+    try:
+        user_id = int(user_id)
+        pattern_name_1 = str(pattern_name_1)
+        pattern_name_2 = str(pattern_name_2)
+        rationale = str(rationale)
+    except (ValueError, TypeError):
+        return {"error": "user_id must be an integer"}
+    return call_api(
+        method="POST",
+        url=f"{BACKEND_URL}/api/patterns/connect_patterns",
+        params={
+            "user_id": user_id,
+            "pattern_name_1": pattern_name_1,
+            "pattern_name_2": pattern_name_2,
+            "rationale": rationale
+        }
+    )
+
+@tool
+def get_connected_patterns(
+    user_id: int,
+    pattern_name: str
+) -> dict:
+    """
+    Find other patterns explicitly connected to a given pattern via a
+    "related_to" relationship (created by connect_patterns), along with the
+    rationale explaining why each connection was made. Unlike
+    get_related_patterns, which infers relationships through shared entities
+    or entries, this returns only patterns that have been directly and
+    intentionally linked, with a human/model-authored explanation for the
+    link. The relationship is treated as symmetric — connections are
+    returned regardless of which pattern was originally the source.
+    Args:
+        user_id (int): The unique identifier of the user who owns this pattern.
+        pattern_name (str): The title of the pattern to find connected patterns for.
+    Returns:
+        dict: API response where each record contains:
+            {
+                "pattern_title": str,
+                "pattern_summary": str,
+                "rationale": str   # why this pattern was connected to the queried one
+            }
+        Returns an error message if the pattern isn't found or has no connected patterns.
+    """
+    try:
+        user_id = int(user_id)
+        pattern_name = str(pattern_name)
+    except (ValueError, TypeError):
+        return {"error": "user_id must be an integer"}
+    return call_api(
+        method="GET",
+        url=f"{BACKEND_URL}/api/patterns/connected_patterns",
+        params={
+            "user_id": user_id,
+            "pattern_name": pattern_name
+        }
+    )
