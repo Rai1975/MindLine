@@ -745,3 +745,86 @@ def get_connected_patterns(
             "pattern_name": pattern_name
         }
     )
+
+@tool
+def read_reflects(
+    user_id: int,
+    entry_id: int
+) -> dict:
+    """
+    Retrieve all reflection questions written for a specific journal entry.
+    Use this to see what reflective questions have already been posed to the
+    user for a given entry, e.g. before deciding whether to write a new one
+    or to reference a prior question in conversation.
+    Args:
+        user_id (int): The unique identifier of the user who owns the entry.
+        entry_id (int): The unique identifier of the journal entry.
+    Returns:
+        dict: API response containing:
+            {
+                "message": str,
+                "data": [
+                    {
+                        "entry_id": int,
+                        "user_id": int,
+                        "question": str
+                    },
+                    ...
+                ]
+            }
+        Returns an error message if user_id or entry_id is missing, or if a
+        database error occurs.
+    """
+    try:
+        user_id = int(user_id)
+        entry_id = int(entry_id)
+    except (ValueError, TypeError):
+        return {"error": "user_id and entry_id must be integers"}
+    return call_api(
+        method="GET",
+        url=f"{BACKEND_URL}/api/reflect/read",
+        params={
+            "user_id": user_id,
+            "entry_id": entry_id
+        }
+    )
+
+
+@tool
+def write_reflect(
+    user_id: int,
+    entry_id: int,
+    question: str
+) -> dict:
+    """
+    Write a new reflective question tied to a specific journal entry. Use
+    this to prompt the user with a question meant to deepen their reflection
+    on something they wrote about in a given entry.
+    Args:
+        user_id (int): The unique identifier of the user who owns the entry.
+        entry_id (int): The unique identifier of the journal entry this question relates to.
+        question (str): The reflective question to store.
+    Returns:
+        dict: API response containing:
+            {
+                "message": str,
+                "data": [{"id": int}]   # the id of the newly created reflect row
+            }
+        Returns an error message if any required field is missing, or if a
+        database error occurs.
+    """
+    try:
+        user_id = int(user_id)
+        entry_id = int(entry_id)
+        question = str(question)
+    except (ValueError, TypeError):
+        return {"error": "user_id and entry_id must be integers"}
+    return call_api(
+        method="POST",
+        url=f"{BACKEND_URL}/api/reflect/write",
+        json_body={
+            "user_id": user_id,
+            "entry_id": entry_id,
+            "question": question
+        }
+    )
