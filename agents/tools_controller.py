@@ -828,3 +828,43 @@ def write_reflect(
             "question": question
         }
     )
+
+@tool
+def new_reframe(
+    user_id: int,
+    entry_id: int,
+    reframe: str
+) -> dict:
+    """
+    Set or update the "reframe" content on a journal entry — a rewritten or
+    reframed version of the entry, typically generated to help the user see
+    the situation from a different, more constructive perspective. Use this
+    after generating a reframe for an entry to persist it.
+    Args:
+        user_id (int): The unique identifier of the user who owns the entry.
+        entry_id (int): The unique identifier of the journal entry to update.
+        reframe (str): The reframed content to store for this entry.
+    Returns:
+        dict: API response containing:
+            {
+                "message": str
+            }
+        Returns an error message if any required field is missing, if no
+        matching entry is found for the given user_id/entry_id, or if a
+        database error occurs.
+    """
+    try:
+        user_id = int(user_id)
+        entry_id = int(entry_id)
+        reframe = str(reframe)
+    except (ValueError, TypeError):
+        return {"error": "user_id and entry_id must be integers"}
+    return call_api(
+        method="POST",
+        url=f"{BACKEND_URL}/api/entries/newReframe",
+        json_body={
+            "user_id": user_id,
+            "entry_id": entry_id,
+            "reframe": reframe
+        }
+    )

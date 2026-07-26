@@ -436,3 +436,34 @@ def keyword_search():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@entries_bp.route('/newReframe', methods=["POST"])
+def new_reframe():
+    data = request.get_json()
+
+    user_id = data.get('user_id', '')
+    entry_id = data.get('entry_id', '')
+    reframe = data.get('reframe', '')
+
+    if user_id == '' or entry_id == '' or reframe == '':
+        return jsonify({"message": "User ID, entryID and reframe content are all required"}), 400
+    
+    query = """
+    UPDATE journal_entries
+    SET reframe = %s
+    WHERE user_id = %s AND id = %s
+    returning id
+    """
+
+    try:
+        cur, conn = connect_sql_db()
+        cur.execute(query, (reframe, user_id, entry_id))
+        results = cur.fetchall()
+        conn.commit()
+    except Exception as e:
+        return jsonify({"message": f"Error: {e}"})
+    finally:
+        cur.close()
+        conn.close()
+    
+    return jsonify({"message": "Success"})
