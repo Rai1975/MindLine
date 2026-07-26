@@ -103,6 +103,7 @@ def read_entries():
         SELECT
             je.id,
             je.cleaned_entry,
+            je.reframe,
 
     '''
 
