@@ -7,7 +7,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from src.backend.auth import login_required, generate_token
 from src.backend.classes.entry import Entry
 from src.backend.classes.stimulus import Stimulus
+from src.backend.utils import redis_client
 import threading
+import json
 
 entries_bp = Blueprint('entries', __name__, url_prefix='/api/entries')
 
@@ -79,22 +81,62 @@ def new_entry():
 @entries_bp.route('/read', methods=['GET'])
 def read_entries():
     cur, conn = connect_sql_db()
-    includeRawEntry = request.args.get('includeRawEntry', 0)
+
+    includeRawEntry = request.args.get('includeRawEntry', '0')
     user_id = request.args.get('user_id', '')
     entry_id = request.args.get('entry_id', '')
     fromDate = request.args.get('from_date', '')
     toDate = request.args.get('to_date', '')
     entity = request.args.get('entity', '')
     emotion = request.args.get('emotion', '')
+
     page = max(int(request.args.get("page", 1)), 1)
     page_size = min(int(request.args.get("page_size", 20)), 100)
 
     if user_id == '':
         return jsonify({'error': 'User ID not provided'}), 400
 
-    cur.execute("SELECT * FROM \"Users\" WHERE id = %s", (user_id, ))
+    # ---------------------------------------------------------
+    # 1. Create a unique cache key
+    # ---------------------------------------------------------
+
+    cache_key = (
+        f"entries:"
+        f"user={user_id}:"
+        f"entry={entry_id}:"
+        f"from={fromDate}:"
+        f"to={toDate}:"
+        f"entity={entity}:"
+        f"emotion={emotion}:"
+        f"raw={includeRawEntry}:"
+        f"page={page}:"
+        f"page_size={page_size}"
+    )
+
+    # ---------------------------------------------------------
+    # 2. Check Redis
+    # ---------------------------------------------------------
+
+    cached_data = redis_client.get(cache_key)
+
+    if cached_data:
+        return jsonify(json.loads(cached_data)), 200
+
+    # ---------------------------------------------------------
+    # 3. Validate user
+    # ---------------------------------------------------------
+
+    cur.execute(
+        'SELECT * FROM "Users" WHERE id = %s',
+        (user_id,)
+    )
+
     if not cur.fetchone():
         return jsonify({'error': 'User does not exist.'}), 400
+
+    # ---------------------------------------------------------
+    # 4. Build SQL query
+    # ---------------------------------------------------------
 
     conditions = ["je.user_id = %s"]
     params = [int(user_id)]
@@ -104,19 +146,26 @@ def read_entries():
             je.id,
             je.cleaned_entry,
             je.reframe,
-
     '''
 
     if int(includeRawEntry):
         query += "je.raw_entry,"
-    
 
     query += '''
-            jsonb_agg(DISTINCT jsonb_build_object('id', s.id, 'entity', s.entity)) AS entities,
+            jsonb_agg(
+                DISTINCT jsonb_build_object(
+                    'id', s.id,
+                    'entity', s.entity
+                )
+            ) AS entities,
             COUNT(*) OVER() AS total_records
         FROM journal_entries je
-        JOIN stimuli_emotions se ON se.entry_id = je.id AND se.user_id = je.user_id
-        JOIN stimuli s ON s.user_id = je.user_id AND se.entity_id = s.id
+        JOIN stimuli_emotions se
+            ON se.entry_id = je.id
+            AND se.user_id = je.user_id
+        JOIN stimuli s
+            ON s.user_id = je.user_id
+            AND se.entity_id = s.id
     '''
 
     try:
@@ -134,63 +183,89 @@ def read_entries():
             conditions.append('je.created_at <= %s')
             params.append(toDate)
 
-        # Use EXISTS so filtering by entity doesn't strip other entities
-        # off the same entry's aggregated `entities` array.
         if entity:
             conditions.append('''
                 EXISTS (
                     SELECT 1
                     FROM stimuli_emotions se2
-                    JOIN stimuli s2 ON s2.user_id = se2.user_id AND s2.id = se2.entity_id
+                    JOIN stimuli s2
+                        ON s2.user_id = se2.user_id
+                        AND s2.id = se2.entity_id
                     WHERE se2.entry_id = je.id
-                      AND se2.user_id = je.user_id
-                      AND s2.entity = %s
+                        AND se2.user_id = je.user_id
+                        AND s2.entity = %s
                 )
             ''')
             params.append(entity)
 
-        # Fixed: OR across e1/e2/e3, not AND — and also wrapped in EXISTS
-        # for the same reason as above.
         if emotion:
             conditions.append('''
                 EXISTS (
                     SELECT 1
                     FROM stimuli_emotions se3
                     WHERE se3.entry_id = je.id
-                      AND se3.user_id = je.user_id
-                      AND (se3.e1 = %s OR se3.e2 = %s OR se3.e3 = %s)
+                        AND se3.user_id = je.user_id
+                        AND (
+                            se3.e1 = %s
+                            OR se3.e2 = %s
+                            OR se3.e3 = %s
+                        )
                 )
             ''')
-            params.extend([emotion, emotion, emotion])
+            params.extend([
+                emotion,
+                emotion,
+                emotion
+            ])
 
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
+        query += " WHERE " + " AND ".join(conditions)
 
-        # GROUP BY goes here — after WHERE, before ORDER BY/LIMIT.
-        # je.id alone is enough (Postgres functional dependency on PK).
         query += " GROUP BY je.id "
 
         offset = (page - 1) * page_size
+
         query += """
             ORDER BY je.created_at DESC
             LIMIT %s OFFSET %s
         """
-        params.extend([page_size, offset])
+
+        params.extend([
+            page_size,
+            offset
+        ])
+
         cur.execute(query, tuple(params))
 
     except Exception as e:
-        return jsonify({"message": f"Database transaction error: {e}"})
+        return jsonify({
+            "message": f"Database transaction error: {e}"
+        }), 500
 
     rows = cur.fetchall()
-    totalCount = rows[0].get('total_records') if rows else 0
 
-    return jsonify({
+    totalCount = (
+        rows[0].get('total_records')
+        if rows else 0
+    )
+
+    response_data = {
         "entries": rows,
         "page": page,
         "pageSize": page_size,
         "total_count": totalCount
-        }), 200
+    }
 
+    # ---------------------------------------------------------
+    # 5. Store result in Redis
+    # ---------------------------------------------------------
+
+    redis_client.setex(
+        cache_key,
+        60 * 5,  # 5 minutes
+        json.dumps(response_data, default=str)
+    )
+
+    return jsonify(response_data), 200
 
 @entries_bp.route('/readCount', methods=['GET'])
 def read_entry_stim_count():
