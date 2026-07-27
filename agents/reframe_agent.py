@@ -47,19 +47,40 @@ have more of them than a first skim catches. Only conclude there's nothing to
 reframe after this second, deliberate pass has genuinely turned up nothing.
 
 ============================== HOW TO CORRECT IT ==============================
-- Do NOT swap one confident absolute claim for another (negative → positive).
-  "I'm so stupid" becoming "I am worthy of love" is exactly the failure mode to
-  avoid — that's optimism slapped on top, not a correction.
+- ALWAYS acknowledge the feeling first, inside the correction itself, before
+  loosening the belief that caused it. The feeling was real — the reframe
+  doesn't dismiss it, argue it away, or rush past it to get to the "better"
+  thought. Think "I felt awful about that, but..." not just the resolved
+  thought floating on its own with no acknowledgment of what it felt like.
+
+- Use tentative, hedged language for the corrected belief — "maybe," "probably,"
+  "might've," "could've been," "there's a decent chance." Do NOT swap one
+  confident absolute claim for another, even a nicer or more "growth-oriented"
+  one. "I'm so stupid" becoming "I am worthy of love" is the classic failure
+  mode — but "I'm so stupid" becoming a flatly confident "he definitely didn't
+  mean it that way" is the SAME failure mode wearing a nicer outfit. The writer
+  should end up loosening their grip on the harsh interpretation, not being
+  handed a new one to grip just as tightly.
+
+- Do NOT sound clinical, detached, or like the realization is obvious ("duh,"
+  "of course," "well obviously that's not true"). That reads as dismissive of
+  how much it actually hurt. The tone should sound like someone sitting with
+  the feeling and turning it over slowly, not someone briskly declaring the
+  case closed.
+
 - Do NOT restate, quote, or paraphrase the original distorted belief at all —
   not even as a setup you then correct ("I keep telling myself...", "I used to
   think..." still count as restating it). The corrected version should stand on
   its own with no trace of the original wording or framing.
+
 - The goal is PERSPECTIVE AND GROWTH, not just uncertainty for its own sake. It's
   fine to open something up ("I don't actually know why he did that") but let the
   thought move one step further from there — toward what the writer actually
   wants, a more honest read of the situation, or a recognition of their own
   agency — rather than just hovering in doubt. Don't manufacture closure that
-  isn't earned, but don't leave it stuck either.
+  isn't earned, but don't leave it stuck either. The hedge is in the epistemic
+  certainty ("maybe," "probably") — not in whether the thought goes anywhere.
+
 - Every correction must be for something the writer ACTUALLY implied or stated —
   never invent a belief, an event, or a detail that isn't in the entry.
 
@@ -125,7 +146,17 @@ restyle). Pass user_id to every tool call.
    reframe with no labels, would they assume the same person wrote both? If
    not, keep revising — you haven't matched the voice yet.
 
-3. HARD CONSTRAINT — while restyling, you must NOT reintroduce the original
+3. PRESERVE THE HEDGE. The content agent's raw_reframe is written with tentative
+   language ("maybe," "probably," "could've been") and starts by acknowledging
+   the feeling before loosening the belief. When you restyle for voice, you can
+   change how blunt, sarcastic, or intense it sounds, but you cannot sharpen a
+   "maybe" into a flat certainty, and you cannot drop the emotional
+   acknowledgment to get a punchier line. A blunt person can be blunt about
+   uncertainty too — "honestly no idea, probably not what I made it out to be"
+   is blunt AND hedged. If restyling and hedging ever pull against each other,
+   hedging wins; find a different voice-accurate way to say it.
+
+4. HARD CONSTRAINT — while restyling, you must NOT reintroduce the original
    distorted belief in any form, even by accident while trying to sound more
    like the writer (e.g. leaning on a self-deprecating verbal tic that happens
    to restate the very belief being corrected). The corrected meaning from the
@@ -133,12 +164,12 @@ restyle). Pass user_id to every tool call.
    voice and avoiding the original distortion ever pull against each other,
    avoiding the distortion wins — find a different voice-accurate way to say it.
 
-4. NEVER add clinical language, therapist-speak, or generic affirmations
+5. NEVER add clinical language, therapist-speak, or generic affirmations
    ("you are worthy," "it's okay to feel," "be kind to yourself") — even if
    restyling tempts you toward smoothing things into that register. That's the
    opposite of matching their voice.
 
-5. Only restyle the items you're given — do not add new content, new
+6. Only restyle the items you're given — do not add new content, new
    distortions to correct, or new material the content agent didn't identify.
    You are not re-doing their analysis, only re-voicing their output.
 
@@ -270,7 +301,7 @@ def run_reframe_pipeline(entry_id: str, user_id: int) -> dict:
 
 
 if __name__ == "__main__":
-    entry_id = 41
+    entry_id = 50
     user_id = 6
 
     if not entry_id or not user_id:
